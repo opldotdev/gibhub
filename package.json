@@ -1,0 +1,52 @@
+{
+	"name": "gibhub.net",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "next dev -p 8266",
+		"build": "next build",
+		"start": "next start",
+		"lint": "biome check",
+		"lint:fix": "biome check --write .",
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@1sat/client": "0.0.55",
+		"@1sat/react": "0.0.93",
+		"@1sat/types": "0.0.48",
+		"@bsv/sdk": "2.6.0",
+		"@radix-ui/react-dialog": "^1.1.23",
+		"@radix-ui/react-dropdown-menu": "^2.1.24",
+		"@radix-ui/react-select": "^2.3.7",
+		"@radix-ui/react-separator": "^1.1.15",
+		"@radix-ui/react-slot": "^1.3.3",
+		"@radix-ui/react-tabs": "^1.1.21",
+		"@radix-ui/react-tooltip": "^1.2.16",
+		"@tanstack/react-query": "^5.102.8",
+		"class-variance-authority": "^0.7.1",
+		"clsx": "^2.1.1",
+		"lucide-react": "^1.41.0",
+		"next": "16.3.4",
+		"next-themes": "^0.4.6",
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
+		"react-markdown": "^10.1.0",
+		"remark-gfm": "^4.0.1",
+		"sonner": "^2.0.8",
+		"sugar-high": "^2.3.0",
+		"tailwind-merge": "^3.6.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.12",
+		"@tailwindcss/postcss": "^4.3.3",
+		"@types/bun": "^1.3.14",
+		"@types/node": "^26.4.1",
+		"@types/react": "^19.2.18",
+		"@types/react-dom": "^19.2.7",
+		"babel-plugin-react-compiler": "1.0.0",
+		"tailwindcss": "^4.3.3",
+		"tw-animate-css": "^1.4.0",
+		"typescript": "^5.9.3"
+	}
+}
