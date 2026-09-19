@@ -12,10 +12,10 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@1sat/actions": "file:vendor/1sat-actions-0.0.221-feat-ordfs-patch.tgz",
+		"@1sat/actions": "0.0.224",
 		"@1sat/client": "0.0.55",
-		"@1sat/react": "0.0.93",
-		"@1sat/templates": "0.0.37",
+		"@1sat/react": "0.0.94",
+		"@1sat/templates": "0.0.38",
 		"@1sat/types": "0.0.48",
 		"@bsv/sdk": "2.6.0",
 		"@radix-ui/react-dialog": "^1.1.23",

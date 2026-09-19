@@ -35,5 +35,5 @@ bun test
 - Manifest decoding comes from `@1sat/actions` (`dirDecode`); do not reimplement it.
   `lib/gib-wallet.ts` mints/burns heads with the CLI's exact conventions; keep them in sync with gib-cli `src/token.ts`.
 - `next.config.ts` stubs `xdelta3-wasm` in the browser bundle; the site never applies patches itself.
-- `@1sat/actions` is a vendored tarball of 1sat-sdk PR #77 until it publishes (see README).
+- Script building and decoding come from `@1sat/actions` / `@1sat/templates`; never hand-roll PushDrop, B, or OP_RETURN scripts here.
 - Tabs, double quotes (Biome). Bun, not npm.

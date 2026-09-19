@@ -63,8 +63,9 @@ is accepted too and resolves to its current head.
 
 ## SDK dependency
 
-`@1sat/actions` is installed from `vendor/1sat-actions-0.0.221-feat-ordfs-patch.tgz`,
-a `bun pm pack` of 1sat-sdk PR #77 (`feat/ordfs-patch`), because the `ordfs/dir`
-codec is not on npm yet. When that publishes, replace the `file:` dependency with
-the released version and delete `vendor/`. `lib/ordfs.ts` decodes binary
-manifests with the SDK's `dirDecode` and legacy JSON manifests locally.
+`@1sat/actions` (0.0.224+) and `@1sat/templates` (0.0.38+) from npm provide
+everything the site needs on chain: `dirDecode` for `ordfs/dir` manifests,
+`buildDataScript` for zero-sat data outputs, `pushDropLock` /
+`unlockByScript` for minting and burning heads, and decoders that accept
+zero-length files. `lib/ordfs.ts` decodes binary manifests with the SDK's
+`dirDecode` and legacy JSON manifests locally.

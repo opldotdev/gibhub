@@ -11,21 +11,22 @@
  */
 
 import {
+	buildDataScript,
 	completeSignedAction,
 	DIR_CONTENT_TYPE,
 	DIR_VERSION,
 	dirEncode,
 	dirEntryNameCompare,
 	dirName,
+	pushDropCustomInstructions,
+	pushDropLock,
 	type DirEntry as SdkDirEntry,
 	stampManagedOutputIds,
+	unlockByScript,
 } from "@1sat/actions";
-import { B, BitCom, Encoding, Inscription } from "@1sat/templates";
+import { Inscription } from "@1sat/templates";
 import {
 	type CreateActionArgs,
-	OP,
-	PushDrop,
-	type Script,
 	Utils,
 	type WalletInterface,
 	type WalletProtocol,
@@ -44,21 +45,11 @@ export const branchTag = (branch: string) => `branch:${branch}`;
 export const pushLabel = (sha: string) => `push:${sha}`;
 
 export const headCustomInstructions = (root: string) =>
-	JSON.stringify({
+	pushDropCustomInstructions({
 		protocolID: GIB_PROTOCOL,
 		keyID: root,
 		counterparty: "anyone",
 	});
-
-/**
- * Standalone zero-sat data output: BitCom appended to an OP_FALSE starting
- * script so the output is provably unspendable and minable at zero sats.
- */
-function dataOutputScript(bytes: Uint8Array, contentType: string): Script {
-	const decoded = BitCom.decode(B.lock(bytes, contentType, Encoding.Binary));
-	if (!decoded) throw new Error("B.lock produced an undecodable script");
-	return new BitCom(decoded.protocols, [OP.OP_FALSE]).lock();
-}
 
 export interface HeadFields {
 	origin: string;
@@ -80,13 +71,16 @@ export async function mintHead(
 	commitBytes: Uint8Array,
 	labels: string[],
 ): Promise<{ txid: string; outpoint: string }> {
-	const lock = await new PushDrop(wallet).lock(
-		headFields(fields),
-		GIB_PROTOCOL,
-		fields.root,
-		"anyone",
-		true,
-		true,
+	const lock = await pushDropLock(
+		wallet,
+		{
+			fields: headFields(fields),
+			protocolID: GIB_PROTOCOL,
+			keyID: fields.root,
+			counterparty: "anyone",
+			forSelf: true,
+		},
+		{ includeSignature: true },
 	);
 	const locking = Inscription.create(commitBytes, GIT_COMMIT_TYPE, {
 		scriptPrefix: lock,
@@ -172,18 +166,16 @@ export async function burnHead(
 			const input = tx.inputs[idx];
 			const source = input?.sourceTransaction?.outputs[input.sourceOutputIndex];
 			if (!source) throw new Error("head input source missing");
-			const script = await new PushDrop(wallet)
-				.unlock(
-					GIB_PROTOCOL,
-					keyID,
-					"anyone",
-					"all",
-					false,
-					source.satoshis ?? 1,
-					source.lockingScript,
-				)
-				.sign(tx, idx);
-			return { [idx]: { unlockingScript: script.toHex() } };
+			const r = await unlockByScript(
+				wallet,
+				tx,
+				idx,
+				source.lockingScript,
+				source.satoshis ?? 1,
+				{ protocolID: GIB_PROTOCOL, keyID, counterparty: "anyone" },
+			);
+			if ("error" in r) throw new Error(`unlock head: ${r.error}`);
+			return { [idx]: { unlockingScript: r.unlockingScript } };
 		},
 		{ acceptDelayedBroadcast: false },
 	);
@@ -231,7 +223,7 @@ export async function forkRepo(
 		description: `gib fork of ${head.branch}`.slice(0, 50),
 		outputs: [
 			{
-				lockingScript: dataOutputScript(rootBytes, DIR_CONTENT_TYPE).toHex(),
+				lockingScript: buildDataScript(rootBytes, DIR_CONTENT_TYPE).toHex(),
 				satoshis: 0,
 				outputDescription: "gib root manifest",
 			},
