@@ -6,7 +6,8 @@ export const STACK_URL = trimTrailingSlash(
 );
 
 /** Wallet basket holding the connected user's commit heads. */
-export const GIB_BASKET = process.env.NEXT_PUBLIC_GIB_BASKET || "gib";
+/** The wallet basket holding commit heads. Protocol constant, same as gib-cli; never configurable. */
+export const GIB_BASKET = "gib";
 
 export const APP_URL = trimTrailingSlash(
 	process.env.NEXT_PUBLIC_APP_URL || "https://gibhub.net",
