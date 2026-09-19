@@ -8,7 +8,7 @@ import {
 	UnsupportedManifest,
 } from "@/components/unsupported-manifest";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
-import { defaultBranchHead, getRepo } from "@/lib/gib-api";
+import { defaultBranchHead, getRepo, repoName } from "@/lib/gib-api";
 import { type DirEntry, fetchText, loadDirectory } from "@/lib/ordfs";
 
 export const revalidate = 30;
@@ -21,7 +21,11 @@ export async function generateMetadata({
 	params: Params;
 }): Promise<Metadata> {
 	const { origin } = await params;
-	return { title: shortOutpoint(toOrdinalOutpoint(origin)) };
+	const repo = await getRepo(toOrdinalOutpoint(origin));
+	return {
+		title: repo ? repoName(repo) : shortOutpoint(toOrdinalOutpoint(origin)),
+		description: repo?.description,
+	};
 }
 
 const README_RE = /^readme(\.(md|markdown|txt))?$/i;
@@ -32,7 +36,7 @@ export default async function RepoPage({ params }: { params: Params }) {
 	const repo = await getRepo(origin);
 	if (!repo) notFound();
 
-	const head = defaultBranchHead(repo.branchHeads);
+	const head = defaultBranchHead(repo.branchHeads, repo.defaultBranch);
 	let entries: DirEntry[] = [];
 	let treeError: unknown = null;
 	if (head) {

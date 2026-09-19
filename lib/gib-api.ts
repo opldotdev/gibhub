@@ -5,7 +5,7 @@
  * components pass a revalidate window; client callers get plain fetches.
  */
 
-import { toOrdinalOutpoint } from "./format";
+import { shortOutpoint, toOrdinalOutpoint } from "./format";
 import { stackApiUrl } from "./stack";
 
 export interface Signature {
@@ -31,6 +31,13 @@ export interface Spend {
 	score: number;
 }
 
+/** The tree's `.gib` file, as indexed by the overlay. Labels, not ids. */
+export interface RepoMeta {
+	name?: string;
+	description?: string;
+	defaultBranch?: string;
+}
+
 export interface HeadRecord {
 	outpoint: string;
 	txid: string;
@@ -42,6 +49,7 @@ export interface HeadRecord {
 	commit?: Commit;
 	prev?: string;
 	spend?: Spend;
+	meta?: RepoMeta;
 	score: number;
 	height: number;
 }
@@ -50,6 +58,9 @@ export interface RepoRecord {
 	origin: string;
 	owner: string;
 	firstOutpoint: string;
+	name?: string;
+	description?: string;
+	defaultBranch?: string;
 	firstScore: number;
 	lastScore: number;
 	heads: number;
@@ -170,9 +181,20 @@ export interface HeadFilter extends Paging {
 export const listHeads = (filter: HeadFilter = {}, opts?: FetchOpts) =>
 	getJson<HeadRecord[]>("/heads", filter, opts).then((r) => r ?? []);
 
-/** Picks the branch a repo page opens on: main, master, else newest. */
-export function defaultBranchHead(heads: HeadRecord[]): HeadRecord | undefined {
+/** Display name for a repository: `.gib` name, else the shortened origin. */
+export function repoName(repo: { origin: string; name?: string }): string {
+	return repo.name?.trim() || shortOutpoint(repo.origin);
+}
+
+/** Picks the branch a repo page opens on: `.gib` defaultBranch, main, master, else newest. */
+export function defaultBranchHead(
+	heads: HeadRecord[],
+	defaultBranch?: string,
+): HeadRecord | undefined {
 	return (
+		(defaultBranch
+			? heads.find((h) => h.branch === defaultBranch)
+			: undefined) ??
 		heads.find((h) => h.branch === "main") ??
 		heads.find((h) => h.branch === "master") ??
 		heads[0]

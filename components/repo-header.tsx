@@ -5,7 +5,7 @@ import { CopyButton } from "@/components/copy-button";
 import { ForkButton } from "@/components/fork-button";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
-import type { HeadRecord, RepoRecord } from "@/lib/gib-api";
+import { type HeadRecord, type RepoRecord, repoName } from "@/lib/gib-api";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -26,16 +26,27 @@ export function RepoHeader({
 	return (
 		<div className="flex flex-col gap-3 mb-4">
 			<div className="flex items-center gap-2 flex-wrap">
-				<h1 className="text-xl font-semibold font-mono" title={repo.origin}>
+				<h1
+					className={`text-xl font-semibold ${repo.name ? "" : "font-mono"}`}
+					title={repo.origin}
+				>
 					<Link href={routes.repo(repo.origin)} className="hover:underline">
-						{shortOutpoint(repo.origin)}
+						{repoName(repo)}
 					</Link>
 				</h1>
+				{repo.name && (
+					<span className="text-xs text-muted-foreground font-mono">
+						{shortOutpoint(repo.origin)}
+					</span>
+				)}
 				<CopyButton value={repo.origin} label="Copy origin" />
 				<span className="text-sm text-muted-foreground">
 					by <IdentityLink identity={repo.owner} />
 				</span>
 			</div>
+			{repo.description && (
+				<p className="text-sm text-muted-foreground">{repo.description}</p>
+			)}
 			<div className="flex items-center gap-3 flex-wrap text-sm">
 				<BranchPicker origin={repo.origin} heads={heads} current={current} />
 				{current && <ForkButton head={current} />}

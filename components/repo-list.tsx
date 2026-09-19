@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Activity } from "@/components/activity";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
-import type { RepoRecord } from "@/lib/gib-api";
+import { type RepoRecord, repoName } from "@/lib/gib-api";
 import { routes } from "@/lib/routes";
 
 export function RepoList({
@@ -23,15 +23,23 @@ export function RepoList({
 					<div className="flex items-baseline gap-2 flex-wrap">
 						<Link
 							href={routes.repo(repo.origin)}
-							className="font-mono font-medium hover:underline"
+							className={`font-medium hover:underline ${repo.name ? "" : "font-mono"}`}
 							title={repo.origin}
 						>
-							{shortOutpoint(repo.origin)}
+							{repoName(repo)}
 						</Link>
+						{repo.name && (
+							<span className="text-xs text-muted-foreground font-mono">
+								{shortOutpoint(repo.origin)}
+							</span>
+						)}
 						<span className="text-xs text-muted-foreground">
 							by <IdentityLink identity={repo.owner} />
 						</span>
 					</div>
+					{repo.description && (
+						<p className="text-sm text-muted-foreground">{repo.description}</p>
+					)}
 					<div className="flex items-center gap-4 text-xs text-muted-foreground">
 						<span className="flex items-center gap-1">
 							<GitBranch className="size-3" /> {repo.branches}{" "}
