@@ -29,7 +29,7 @@ overlay (`/1sat/gib`).
 In-browser editing is a later revision. No social layer. Wallet operations in
 `lib/gib-wallet.ts` follow the gib CLI's conventions exactly (protocol
 `[1, "gib branch"]`, keyID = root outpoint, basket `gib`, `origin:`/`branch:`
-tags, `push:<sha>` labels, commit object inscribed after the PushDrop lock).
+tags incl. `commit:<sha>`, fixed `gib push` / `gib delete` labels, commit object inscribed after the PushDrop lock).
 
 ## Stack
 

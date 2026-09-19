@@ -5,7 +5,7 @@
  * indistinguishable from CLI pushes: PushDrop protocol `[1, "gib branch"]`,
  * keyID = the root outpoint, counterparty `anyone`, fields as UTF-8 strings,
  * the git commit object inscribed after the lock, basket `gib`, tags
- * `origin:` / `branch:`, labels `push:<sha>`.
+ * `origin:` / `branch:` / `commit:<sha>`, fixed labels `gib push` / `gib delete`.
  *
  * Client-side only: every call goes through the connected BRC-100 wallet.
  */
@@ -35,7 +35,14 @@ const UNLOCK_LENGTH = 73;
 
 export const originTag = (origin: string) => `origin:${origin}`;
 export const branchTag = (branch: string) => `branch:${branch}`;
-export const pushLabel = (sha: string) => `push:${sha}`;
+/**
+ * Fixed action labels: BRC-100 wallets gate each distinct label string as
+ * its own permission, so a per-commit label would prompt on every push.
+ * The commit sha lives in a tag on the basketed head output instead.
+ */
+export const LABEL_PUSH = "gib push";
+export const LABEL_DELETE = "gib delete";
+export const commitTag = (sha: string) => `commit:${sha}`;
 
 export const headCustomInstructions = (root: string) =>
 	pushDropCustomInstructions({
@@ -62,7 +69,7 @@ export async function mintHead(
 	wallet: WalletInterface,
 	fields: HeadFields,
 	commitBytes: Uint8Array,
-	labels: string[],
+	sha: string | undefined,
 ): Promise<{ txid: string; outpoint: string }> {
 	const lock = await pushDropLock(
 		wallet,
@@ -79,18 +86,22 @@ export async function mintHead(
 		scriptPrefix: lock,
 	}).lock();
 	const args: CreateActionArgs = {
-		description: `gib head ${fields.branch}`.slice(0, 50),
+		description: `gib head ${sha ?? fields.branch}`.slice(0, 50),
 		outputs: [
 			{
 				lockingScript: locking.toHex(),
 				satoshis: 1,
 				outputDescription: "gib commit head",
 				basket: GIB_BASKET,
-				tags: [originTag(fields.origin), branchTag(fields.branch)],
+				tags: [
+					originTag(fields.origin),
+					branchTag(fields.branch),
+					...(sha ? [commitTag(sha)] : []),
+				],
 				customInstructions: headCustomInstructions(fields.root),
 			},
 		],
-		labels,
+		labels: [LABEL_PUSH],
 		options: { randomizeOutputs: false },
 	};
 	stampManagedOutputIds(args);
@@ -140,7 +151,7 @@ export async function burnHead(
 				unlockingScriptLength: UNLOCK_LENGTH,
 			},
 		],
-		labels: [pushLabel("delete")],
+		labels: [LABEL_DELETE],
 		options: { signAndProcess: false },
 	});
 
@@ -197,12 +208,11 @@ export async function branchFromHead(
 		throw new Error(`could not fetch the commit object (${commitRes.status})`);
 	}
 	const commitBytes = new Uint8Array(await commitRes.arrayBuffer());
-	const labels = [pushLabel(head.commit?.sha ?? "branch")];
 	const minted = await mintHead(
 		wallet,
 		{ origin: head.origin, branch: name, root: head.root, identity },
 		commitBytes,
-		labels,
+		head.commit?.sha,
 	);
 	return { origin: head.origin, head: minted.outpoint };
 }
