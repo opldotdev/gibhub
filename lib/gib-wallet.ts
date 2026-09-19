@@ -23,7 +23,9 @@ import {
 import { B, Encoding, Inscription } from "@1sat/templates";
 import {
 	type CreateActionArgs,
+	OP,
 	PushDrop,
+	Script,
 	Utils,
 	type WalletInterface,
 	type WalletProtocol,
@@ -47,6 +49,18 @@ export const headCustomInstructions = (root: string) =>
 		keyID: root,
 		counterparty: "anyone",
 	});
+
+/**
+ * Zero-sat data output. Must start with OP_FALSE OP_RETURN (provably
+ * unspendable) or miners treat it as dust and never mine it; the B template
+ * emits only the bare OP_RETURN fragment.
+ */
+function dataOutputScript(bytes: Uint8Array, contentType: string): Script {
+	return new Script([
+		{ op: OP.OP_FALSE },
+		...B.lock(bytes, contentType, Encoding.Binary).chunks,
+	]);
+}
 
 export interface HeadFields {
 	origin: string;
@@ -219,11 +233,7 @@ export async function forkRepo(
 		description: `gib fork of ${head.branch}`.slice(0, 50),
 		outputs: [
 			{
-				lockingScript: B.lock(
-					rootBytes,
-					DIR_CONTENT_TYPE,
-					Encoding.Binary,
-				).toHex(),
+				lockingScript: dataOutputScript(rootBytes, DIR_CONTENT_TYPE).toHex(),
 				satoshis: 0,
 				outputDescription: "gib root manifest",
 			},
