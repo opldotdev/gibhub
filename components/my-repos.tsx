@@ -10,12 +10,32 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
 import { getHead, type HeadRecord } from "@/lib/gib-api";
+import { loadRepoMeta } from "@/lib/ordfs";
 import { routes } from "@/lib/routes";
 import { GIB_BASKET } from "@/lib/stack";
 
 interface BasketHead {
 	outpoint: string;
 	head: HeadRecord | null;
+}
+
+/** Repository name from the origin's `.gib` on ORDFS; the outpoint until it loads. */
+function OriginName({ origin }: { origin: string }) {
+	const meta = useQuery({
+		queryKey: ["repo-meta", origin],
+		queryFn: () => loadRepoMeta(origin),
+		staleTime: Number.POSITIVE_INFINITY,
+	});
+	const name = meta.data?.name;
+	return (
+		<Link
+			href={routes.repo(origin)}
+			className={`hover:underline ${name ? "" : "font-mono"}`}
+			title={origin}
+		>
+			{name ?? shortOutpoint(origin)}
+		</Link>
+	);
 }
 
 /**
@@ -118,14 +138,11 @@ export function MyRepos() {
 			)}
 			{[...byOrigin.entries()].map(([origin, heads]) => (
 				<section key={origin}>
-					<h2 className="font-mono font-medium mb-2">
-						<Link
-							href={routes.repo(origin)}
-							className="hover:underline"
-							title={origin}
-						>
+					<h2 className="font-medium mb-2 flex items-baseline gap-2">
+						<OriginName origin={origin} />
+						<span className="text-xs text-muted-foreground font-mono">
 							{shortOutpoint(origin)}
-						</Link>
+						</span>
 					</h2>
 					<HeadList
 						heads={heads}

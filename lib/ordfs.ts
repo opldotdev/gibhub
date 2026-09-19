@@ -283,3 +283,28 @@ export async function fetchText(
 		contentType: baseType(res.headers.get("content-type")),
 	};
 }
+
+/**
+ * The repository's `.gib` straight from ORDFS at the origin path, so a
+ * name resolves without the overlay. Missing or malformed → undefined.
+ */
+export async function loadRepoMeta(
+	origin: string,
+): Promise<
+	{ name?: string; description?: string; defaultBranch?: string } | undefined
+> {
+	try {
+		const res = await fetch(contentUrl(origin, ".gib"), { cache: "no-store" });
+		if (!res.ok) return undefined;
+		const j = (await res.json()) as Record<string, unknown>;
+		const str = (v: unknown) =>
+			typeof v === "string" && v.trim() ? v.trim() : undefined;
+		return {
+			name: str(j.name),
+			description: str(j.description),
+			defaultBranch: str(j.defaultBranch),
+		};
+	} catch {
+		return undefined;
+	}
+}
