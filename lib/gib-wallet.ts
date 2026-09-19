@@ -98,7 +98,7 @@ export async function mintHead(
 			},
 		],
 		labels,
-		options: { randomizeOutputs: false, signAndProcess: true },
+		options: { randomizeOutputs: false },
 	};
 	stampManagedOutputIds(args);
 	const result = await wallet.createAction(args);
@@ -229,7 +229,7 @@ export async function forkRepo(
 			},
 		],
 		labels,
-		options: { randomizeOutputs: false, signAndProcess: true },
+		options: { randomizeOutputs: false },
 	});
 	if (!content.txid)
 		throw new Error("wallet returned no txid for the manifest");
