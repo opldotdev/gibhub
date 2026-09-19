@@ -20,12 +20,12 @@ import {
 	type DirEntry as SdkDirEntry,
 	stampManagedOutputIds,
 } from "@1sat/actions";
-import { B, Encoding, Inscription } from "@1sat/templates";
+import { B, BitCom, Encoding, Inscription } from "@1sat/templates";
 import {
 	type CreateActionArgs,
 	OP,
 	PushDrop,
-	Script,
+	type Script,
 	Utils,
 	type WalletInterface,
 	type WalletProtocol,
@@ -51,15 +51,13 @@ export const headCustomInstructions = (root: string) =>
 	});
 
 /**
- * Zero-sat data output. Must start with OP_FALSE OP_RETURN (provably
- * unspendable) or miners treat it as dust and never mine it; the B template
- * emits only the bare OP_RETURN fragment.
+ * Standalone zero-sat data output: BitCom appended to an OP_FALSE starting
+ * script so the output is provably unspendable and minable at zero sats.
  */
 function dataOutputScript(bytes: Uint8Array, contentType: string): Script {
-	return new Script([
-		{ op: OP.OP_FALSE },
-		...B.lock(bytes, contentType, Encoding.Binary).chunks,
-	]);
+	const decoded = BitCom.decode(B.lock(bytes, contentType, Encoding.Binary));
+	if (!decoded) throw new Error("B.lock produced an undecodable script");
+	return new BitCom(decoded.protocols, [OP.OP_FALSE]).lock();
 }
 
 export interface HeadFields {
