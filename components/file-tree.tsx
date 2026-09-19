@@ -50,6 +50,16 @@ export function FileTree({
 											<File className="size-4 text-muted-foreground shrink-0" />
 										)}
 										<span className="font-mono truncate">{entry.name}</span>
+										{entry.symlink && (
+											<span className="text-xs text-muted-foreground">
+												symlink
+											</span>
+										)}
+										{entry.exec && (
+											<span className="text-xs text-muted-foreground">
+												exec
+											</span>
+										)}
 									</Link>
 								</td>
 								<td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap hidden sm:table-cell">

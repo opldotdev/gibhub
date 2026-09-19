@@ -50,9 +50,10 @@ block to `/manifest.json` so the 1Sat desktop wallet trusts this origin.
 Refs in URLs are head outpoints (immutable), so links never rot; a branch name
 is accepted too and resolves to its current head.
 
-## Pending on the SDK
+## SDK dependency
 
-`lib/ordfs.ts` decodes legacy JSON manifests locally. Binary `ordfs/dir`
-manifests need the codec being added to the `@1sat` SDK; `decodeBinaryManifest`
-is the one function to wire when it lands. The gib PushDrop template (fork,
-delete) comes from the same SDK work.
+`@1sat/actions` is installed from `vendor/1sat-actions-0.0.221-feat-ordfs-patch.tgz`,
+a `bun pm pack` of 1sat-sdk PR #77 (`feat/ordfs-patch`), because the `ordfs/dir`
+codec is not on npm yet. When that publishes, replace the `file:` dependency with
+the released version and delete `vendor/`. `lib/ordfs.ts` decodes binary
+manifests with the SDK's `dirDecode` and legacy JSON manifests locally.

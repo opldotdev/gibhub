@@ -4,16 +4,21 @@
  * The gateway resolves paths and applies patch chains itself
  * (`/content/{root}/path/to/file`), so file bytes always come from there.
  * Listing a directory needs the manifest bytes, fetched raw and decoded
- * here. JSON manifests (`ord-fs/json`) are decoded locally; binary
- * `ordfs/dir` manifests are decoded by the @1sat SDK codec once it ships,
- * see decodeBinaryManifest.
+ * here: binary `ordfs/dir` via the @1sat SDK codec, legacy `ord-fs/json`
+ * locally.
  */
 
+import {
+	DIR_CONTENT_TYPE,
+	dirDecode,
+	dirNameString,
+	JSON_MANIFEST_CONTENT_TYPE_LEGACY,
+} from "@1sat/actions";
 import { outpointTxid, toOrdinalOutpoint } from "./format";
 import { STACK_URL, stackApiUrl } from "./stack";
 
-export const JSON_MANIFEST_TYPE = "ord-fs/json";
-export const BINARY_MANIFEST_TYPE = "ordfs/dir";
+export const JSON_MANIFEST_TYPE = JSON_MANIFEST_CONTENT_TYPE_LEGACY;
+export const BINARY_MANIFEST_TYPE = DIR_CONTENT_TYPE;
 export const PATCH_TYPE = "ordfs/patch";
 
 export type EntryKind = "file" | "dir";
@@ -22,6 +27,10 @@ export interface DirEntry {
 	name: string;
 	outpoint: string;
 	kind: EntryKind;
+	/** git mode 100755 */
+	exec?: boolean;
+	/** content is a relative target path */
+	symlink?: boolean;
 	contentType?: string;
 	size?: number;
 }
@@ -47,20 +56,20 @@ export const contentUrl = (outpoint: string, path = "") =>
 export const rawContentUrl = (outpoint: string) =>
 	`${contentUrl(outpoint)}?raw=true`;
 
-export const isManifestType = (contentType: string | undefined) => {
-	const base = (contentType ?? "").split(";")[0]?.trim();
-	return base === JSON_MANIFEST_TYPE || base === BINARY_MANIFEST_TYPE;
-};
-
 const baseType = (contentType: string | null | undefined) =>
 	(contentType ?? "").split(";")[0]?.trim() ?? "";
+
+export const isManifestType = (contentType: string | undefined) => {
+	const base = baseType(contentType);
+	return base === JSON_MANIFEST_TYPE || base === BINARY_MANIFEST_TYPE;
+};
 
 function serverFetchInit(revalidate: number): RequestInit {
 	if (typeof window !== "undefined") return {};
 	return { next: { revalidate } } as RequestInit;
 }
 
-/** Resolves a manifest pointer (`_N` sibling or full outpoint). */
+/** Resolves a JSON manifest pointer (`_N` sibling or full outpoint). */
 export function resolvePointer(manifestOutpoint: string, pointer: string) {
 	if (pointer.startsWith("_")) {
 		return `${outpointTxid(manifestOutpoint)}_${pointer.slice(1)}`;
@@ -68,15 +77,43 @@ export function resolvePointer(manifestOutpoint: string, pointer: string) {
 	return toOrdinalOutpoint(pointer);
 }
 
-/**
- * Adapter for binary `ordfs/dir` manifests. Wire the @1sat SDK decoder
- * here when it lands; until then binary trees report as unsupported.
- */
+/** A manifest entry before metadata enrichment. */
+interface RawEntry {
+	name: string;
+	outpoint: string;
+	/** Known from the binary format; undefined for legacy JSON. */
+	isDir?: boolean;
+	exec?: boolean;
+	symlink?: boolean;
+}
+
+/** Decodes a binary `ordfs/dir` manifest into entries with resolved outpoints. */
 export function decodeBinaryManifest(
-	_bytes: Uint8Array,
-	_manifestOutpoint: string,
-): Record<string, string> {
-	throw new UnsupportedManifestError(BINARY_MANIFEST_TYPE);
+	bytes: Uint8Array,
+	manifestOutpoint: string,
+): RawEntry[] {
+	const txid = outpointTxid(manifestOutpoint);
+	return dirDecode(bytes).entries.map((e) => ({
+		name: dirNameString(e.name),
+		outpoint:
+			e.ref.kind === "same-tx"
+				? `${txid}_${e.ref.vout}`
+				: `${e.ref.txid}_${e.ref.vout}`,
+		isDir: e.isDir,
+		exec: e.exec,
+		symlink: e.symlink,
+	}));
+}
+
+/** Decodes a legacy `ord-fs/json` manifest (`{ name: "_N" | "txid_vout" }`). */
+export function decodeJsonManifest(
+	pointers: Record<string, string>,
+	manifestOutpoint: string,
+): RawEntry[] {
+	return Object.entries(pointers).map(([name, pointer]) => ({
+		name,
+		outpoint: resolvePointer(manifestOutpoint, pointer),
+	}));
 }
 
 /** Fetches bulk metadata for up to 100 outpoints. */
@@ -107,7 +144,7 @@ export async function getMetadata(
 }
 
 /**
- * Lists a directory manifest's entries, classified as file or dir via bulk
+ * Lists a directory manifest's entries with content type and size from bulk
  * metadata. Immutable by outpoint, so cached aggressively.
  */
 export async function loadDirectory(
@@ -118,40 +155,39 @@ export async function loadDirectory(
 	if (!res.ok) throw new Error(`ordfs content ${outpoint}: ${res.status}`);
 	const type = baseType(res.headers.get("content-type"));
 
-	let pointers: Record<string, string>;
-	if (type === JSON_MANIFEST_TYPE) {
-		pointers = (await res.json()) as Record<string, string>;
-	} else if (type === BINARY_MANIFEST_TYPE) {
-		pointers = decodeBinaryManifest(
+	let raw: RawEntry[];
+	if (type === BINARY_MANIFEST_TYPE) {
+		raw = decodeBinaryManifest(
 			new Uint8Array(await res.arrayBuffer()),
+			outpoint,
+		);
+	} else if (type === JSON_MANIFEST_TYPE) {
+		raw = decodeJsonManifest(
+			(await res.json()) as Record<string, string>,
 			outpoint,
 		);
 	} else {
 		throw new UnsupportedManifestError(type || "unknown");
 	}
 
-	const names = Object.keys(pointers).sort((a, b) => a.localeCompare(b));
-	const resolved = names.map((name) => ({
-		name,
-		outpoint: resolvePointer(outpoint, pointers[name] as string),
-	}));
-
 	const meta: Record<string, OrdfsMetadata | null> = {};
-	for (let i = 0; i < resolved.length; i += 100) {
+	for (let i = 0; i < raw.length; i += 100) {
 		Object.assign(
 			meta,
-			await bulkMetadata(resolved.slice(i, i + 100).map((e) => e.outpoint)),
+			await bulkMetadata(raw.slice(i, i + 100).map((e) => e.outpoint)),
 		);
 	}
 
-	const entries: DirEntry[] = resolved.map(({ name, outpoint: op }) => {
-		const m = meta[op];
-		const contentType = m?.contentType;
+	const entries: DirEntry[] = raw.map((e) => {
+		const m = meta[e.outpoint];
+		const contentType = m?.contentType ? baseType(m.contentType) : undefined;
 		return {
-			name,
-			outpoint: op,
-			kind: isManifestType(contentType) ? "dir" : "file",
-			contentType: contentType ? baseType(contentType) : undefined,
+			name: e.name,
+			outpoint: e.outpoint,
+			kind: (e.isDir ?? isManifestType(contentType)) ? "dir" : "file",
+			exec: e.exec,
+			symlink: e.symlink,
+			contentType,
 			size: m?.contentLength,
 		};
 	});
