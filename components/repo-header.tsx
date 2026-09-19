@@ -2,6 +2,7 @@ import { GitBranch, History } from "lucide-react";
 import Link from "next/link";
 import { BranchPicker } from "@/components/branch-picker";
 import { CopyButton } from "@/components/copy-button";
+import { ExplorerLink } from "@/components/explorer-link";
 import { ForkButton } from "@/components/fork-button";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
@@ -40,6 +41,10 @@ export function RepoHeader({
 					</span>
 				)}
 				<CopyButton value={repo.origin} label="Copy origin" />
+				<ExplorerLink
+					outpoint={repo.origin}
+					label="Origin transaction on bananablocks"
+				/>
 				<span className="text-sm text-muted-foreground">
 					by <IdentityLink identity={repo.owner} />
 				</span>

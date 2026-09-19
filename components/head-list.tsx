@@ -2,6 +2,7 @@ import { FolderTree, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Activity } from "@/components/activity";
+import { ExplorerLink } from "@/components/explorer-link";
 import { IdentityLink } from "@/components/identity-link";
 import { Badge } from "@/components/ui/badge";
 import { firstLine, shortOutpoint, shortSha, timeAgo } from "@/lib/format";
@@ -96,6 +97,10 @@ export function HeadList({
 							>
 								<FolderTree className="size-4" />
 							</Link>
+							<ExplorerLink
+								txid={head.txid}
+								label="Head transaction on bananablocks"
+							/>
 						</div>
 					</li>
 				);

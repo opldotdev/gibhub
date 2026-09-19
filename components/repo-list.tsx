@@ -1,6 +1,7 @@
 import { GitBranch, GitCommitHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Activity } from "@/components/activity";
+import { ExplorerLink } from "@/components/explorer-link";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
 import { type RepoRecord, repoName } from "@/lib/gib-api";
@@ -36,6 +37,11 @@ export function RepoList({
 						<span className="text-xs text-muted-foreground">
 							by <IdentityLink identity={repo.owner} />
 						</span>
+						<ExplorerLink
+							outpoint={repo.firstOutpoint}
+							label="Genesis head transaction on bananablocks"
+							className="ml-auto"
+						/>
 					</div>
 					{repo.description && (
 						<p className="text-sm text-muted-foreground">{repo.description}</p>

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { BlobView } from "@/components/blob-view";
 import { CopyButton } from "@/components/copy-button";
+import { ExplorerLink } from "@/components/explorer-link";
 import { PathBreadcrumbs } from "@/components/path-breadcrumbs";
 import { RepoHeader } from "@/components/repo-header";
 import {
@@ -84,6 +85,12 @@ export default async function BlobPage({ params }: { params: Params }) {
 				<a href={contentUrl(entry.outpoint)} className="underline ml-auto">
 					Raw
 				</a>
+				<ExplorerLink
+					outpoint={entry.outpoint}
+					label="Transaction holding this file on bananablocks"
+				>
+					<span className="underline">Explorer</span>
+				</ExplorerLink>
 			</div>
 			<BlobView
 				name={name}

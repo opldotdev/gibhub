@@ -8,6 +8,7 @@ import { IdentityLink } from "@/components/identity-link";
 import { RepoHeader } from "@/components/repo-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { txExplorerUrl } from "@/lib/explorer";
 import {
 	firstLine,
 	messageBody,
@@ -151,7 +152,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 							<Term>spent in</Term>
 							<dd className="font-mono break-all">
 								<a
-									href={`https://whatsonchain.com/tx/${head.spend.txid}`}
+									href={txExplorerUrl(head.spend.txid)}
 									className="hover:underline"
 									rel="noreferrer"
 									target="_blank"
@@ -164,7 +165,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 					<Term>transaction</Term>
 					<dd className="font-mono break-all">
 						<a
-							href={`https://whatsonchain.com/tx/${head.txid}`}
+							href={txExplorerUrl(head.txid)}
 							className="hover:underline"
 							rel="noreferrer"
 							target="_blank"
