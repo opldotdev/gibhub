@@ -21,16 +21,16 @@ import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
 
-type Params = Promise<{ origin: string; ref: string; path: string[] }>;
+type Params = Promise<{ origin: string; headRef: string; path: string[] }>;
 
 export default async function BlobPage({ params }: { params: Params }) {
-	const { origin: rawOrigin, ref, path: rawPath } = await params;
+	const { origin: rawOrigin, headRef, path: rawPath } = await params;
 	const origin = toOrdinalOutpoint(rawOrigin);
 	const path = rawPath.map(decodeURIComponent);
 
 	const [repo, resolved] = await Promise.all([
 		getRepo(origin),
-		resolveRef(origin, ref),
+		resolveRef(origin, headRef),
 	]);
 	if (!repo || !resolved) notFound();
 	const { head } = resolved;
@@ -70,7 +70,7 @@ export default async function BlobPage({ params }: { params: Params }) {
 			/>
 			<PathBreadcrumbs
 				origin={origin}
-				ref={head.outpoint}
+				headRef={head.outpoint}
 				path={path}
 				rootLabel={shortOutpoint(origin)}
 			/>
@@ -93,7 +93,7 @@ export default async function BlobPage({ params }: { params: Params }) {
 				text={text?.text ?? null}
 				truncated={text?.truncated ?? false}
 				origin={origin}
-				ref={head.outpoint}
+				headRef={head.outpoint}
 				root={head.root}
 				dir={path.slice(0, -1)}
 			/>

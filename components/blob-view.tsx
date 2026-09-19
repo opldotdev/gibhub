@@ -48,7 +48,7 @@ export function BlobView({
 	text,
 	truncated,
 	origin,
-	ref,
+	headRef,
 	root,
 	dir,
 }: {
@@ -59,7 +59,7 @@ export function BlobView({
 	text: string | null;
 	truncated: boolean;
 	origin: string;
-	ref: string;
+	headRef: string;
 	root: string;
 	dir: string[];
 }) {
@@ -89,7 +89,7 @@ export function BlobView({
 				<Markdown
 					source={text}
 					origin={origin}
-					ref={ref}
+					headRef={headRef}
 					root={root}
 					dir={dir}
 				/>

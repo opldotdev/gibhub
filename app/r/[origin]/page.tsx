@@ -71,7 +71,7 @@ export default async function RepoPage({ params }: { params: Params }) {
 			{head && !treeError && (
 				<FileTree
 					origin={origin}
-					ref={head.outpoint}
+					headRef={head.outpoint}
 					path={[]}
 					entries={entries}
 				/>
@@ -86,7 +86,7 @@ export default async function RepoPage({ params }: { params: Params }) {
 							<Markdown
 								source={readmeText.text}
 								origin={origin}
-								ref={head.outpoint}
+								headRef={head.outpoint}
 								root={head.root}
 							/>
 						) : (

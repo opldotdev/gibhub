@@ -26,13 +26,13 @@ function joinPath(base: string[], rel: string): string[] {
 export function Markdown({
 	source,
 	origin,
-	ref,
+	headRef,
 	root,
 	dir = [],
 }: {
 	source: string;
 	origin: string;
-	ref: string;
+	headRef: string;
 	root: string;
 	/** Directory of the markdown file, as path components. */
 	dir?: string[];
@@ -45,7 +45,7 @@ export function Markdown({
 					if (!isRelative(url)) return url;
 					const target = joinPath(dir, url.split("#")[0] ?? "");
 					if (key === "src") return contentUrl(root, target.join("/"));
-					return routes.blob(origin, ref, target);
+					return routes.blob(origin, headRef, target);
 				}}
 			>
 				{source}

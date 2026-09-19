@@ -4,19 +4,19 @@ import { routes } from "@/lib/routes";
 
 export function PathBreadcrumbs({
 	origin,
-	ref,
+	headRef,
 	path,
 	rootLabel,
 }: {
 	origin: string;
-	ref: string;
+	headRef: string;
 	path: string[];
 	rootLabel: string;
 }) {
 	return (
 		<div className="font-mono text-sm flex items-center gap-1 flex-wrap mb-3">
 			<Link
-				href={routes.tree(origin, ref)}
+				href={routes.tree(origin, headRef)}
 				className="hover:underline font-medium"
 			>
 				{rootLabel}
@@ -31,7 +31,7 @@ export function PathBreadcrumbs({
 							<span>{seg}</span>
 						) : (
 							<Link
-								href={routes.tree(origin, ref, sub)}
+								href={routes.tree(origin, headRef, sub)}
 								className="hover:underline"
 							>
 								{seg}
