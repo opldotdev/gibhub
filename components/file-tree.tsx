@@ -60,6 +60,14 @@ export function FileTree({
 												exec
 											</span>
 										)}
+										{entry.patched && (
+											<span
+												className="text-xs text-muted-foreground"
+												title="Resolved from an ordfs/patch chain"
+											>
+												patched
+											</span>
+										)}
 									</Link>
 								</td>
 								<td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap hidden sm:table-cell">
