@@ -60,6 +60,13 @@ export interface RepoResponse extends RepoRecord {
 	branchHeads: HeadRecord[];
 }
 
+/** A git commit as a DAG node: heads publishing it and heads building on it. */
+export interface CommitResponse {
+	sha: string;
+	heads: HeadRecord[];
+	children: HeadRecord[];
+}
+
 export interface BranchResponse {
 	origin: string;
 	branch: string;
@@ -149,6 +156,9 @@ export const getBranch = (
 
 export const getHead = (outpoint: string, opts?: FetchOpts) =>
 	getJson<HeadRecord>(`/head/${toOrdinalOutpoint(outpoint)}`, {}, opts);
+
+export const getCommit = (sha: string, opts?: FetchOpts) =>
+	getJson<CommitResponse>(`/commit/${sha.toLowerCase()}`, {}, opts);
 
 export interface HeadFilter extends Paging {
 	origin?: string;

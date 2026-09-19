@@ -14,6 +14,8 @@ export const routes = {
 		`/r/${toOrdinalOutpoint(origin)}/blob/${enc(ref)}/${encPath(path)}`,
 	commits: (origin: string, branch: string) =>
 		`/r/${toOrdinalOutpoint(origin)}/commits/${branch.split("/").map(enc).join("/")}`,
+	/** A git commit as a DAG node, independent of repository. */
+	commitSha: (sha: string) => `/c/${sha.toLowerCase()}`,
 	commit: (origin: string, headOutpoint: string) =>
 		`/r/${toOrdinalOutpoint(origin)}/commit/${toOrdinalOutpoint(headOutpoint)}`,
 };

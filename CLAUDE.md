@@ -19,7 +19,7 @@ bun test
 
 - `app/` routes: `/` explore, `/r/[origin]` repo, `/r/[origin]/tree/[ref]/[[...path]]`,
   `/r/[origin]/blob/[ref]/[...path]`, `/r/[origin]/commits/[...branch]`,
-  `/r/[origin]/commit/[head]`, `/u/[identity]`, `/me` (wallet), `/manifest.json`.
+  `/r/[origin]/commit/[head]`, `/c/[sha]` (commit DAG node), `/u/[identity]`, `/me` (wallet), `/manifest.json`.
 - `lib/gib-api.ts` typed overlay client; `lib/ordfs.ts` manifests + content;
   `lib/resolve-ref.ts` ref → head; `lib/routes.ts` URL builders.
 - `components/ui/` is shadcn (copied from 1satwallet.com, excluded from Biome).

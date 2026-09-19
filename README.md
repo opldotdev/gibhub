@@ -13,6 +13,10 @@ overlay (`/1sat/gib`).
 - **Repository**: current branches, file tree at any push, README, per-file
   view with syntax highlighting, push history with git commit metadata.
 - **Publisher page**: repositories and pushes by identity key.
+- **Commit DAG**: `/c/<sha>` shows a git commit as a node: every head that
+  publishes it (across repos and forks), its parents, and the commits that
+  build on it. Parents resolve through the overlay's sha index, so history
+  is followable across origins.
 - **My repos**: connect a BRC-100 wallet and see the commit heads in your
   `gib` basket, resolved through the overlay.
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Activity } from "@/components/activity";
 import { CopyButton } from "@/components/copy-button";
+import { HeadList } from "@/components/head-list";
 import { IdentityLink } from "@/components/identity-link";
 import { RepoHeader } from "@/components/repo-header";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import {
 	timeAgo,
 	toOrdinalOutpoint,
 } from "@/lib/format";
-import { getHead, getRepo, type Signature } from "@/lib/gib-api";
+import { getCommit, getHead, getRepo, type Signature } from "@/lib/gib-api";
 import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
@@ -30,6 +31,10 @@ export default async function CommitPage({ params }: { params: Params }) {
 	]);
 	if (!repo || !head || head.origin !== origin) notFound();
 	const commit = head.commit;
+	const node = commit ? await getCommit(commit.sha) : null;
+	const elsewhere =
+		node?.heads.filter((h) => h.outpoint !== head.outpoint) ?? [];
+	const children = node?.children ?? [];
 	const deleted = head.spend && !head.spend.next;
 
 	return (
@@ -79,7 +84,15 @@ export default async function CommitPage({ params }: { params: Params }) {
 					{commit && (
 						<>
 							<Term>commit</Term>
-							<Mono value={commit.sha} />
+							<dd className="font-mono flex items-center gap-1 break-all">
+								<Link
+									href={routes.commitSha(commit.sha)}
+									className="hover:underline"
+								>
+									{commit.sha}
+								</Link>
+								<CopyButton value={commit.sha} />
+							</dd>
 							<Term>tree</Term>
 							<Mono value={commit.tree} />
 							{commit.parents.map((p) => (
@@ -161,6 +174,26 @@ export default async function CommitPage({ params }: { params: Params }) {
 					</dd>
 				</dl>
 			</div>
+			{(elsewhere.length > 0 || children.length > 0) && (
+				<div className="mt-6 grid gap-6 lg:grid-cols-2">
+					<section>
+						<h2 className="text-sm font-semibold mb-2">Also published as</h2>
+						<HeadList
+							heads={elsewhere}
+							showRepo
+							empty="Only this head carries this commit."
+						/>
+					</section>
+					<section>
+						<h2 className="text-sm font-semibold mb-2">Built on by</h2>
+						<HeadList
+							heads={children}
+							showRepo
+							empty="Nothing indexed builds on this commit yet."
+						/>
+					</section>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -182,7 +215,12 @@ function ParentRow({ sha }: { sha: string }) {
 	return (
 		<>
 			<Term>parent</Term>
-			<Mono value={sha} />
+			<dd className="font-mono flex items-center gap-1 break-all">
+				<Link href={routes.commitSha(sha)} className="hover:underline">
+					{sha}
+				</Link>
+				<CopyButton value={sha} />
+			</dd>
 		</>
 	);
 }
