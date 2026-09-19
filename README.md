@@ -26,6 +26,13 @@ overlay (`/1sat/gib`).
   source branch. Fork-as-new-origin was removed: a detached copy is a CLI
   operation on a fresh `gib init`.
 
+- **Author handles (BRC-169)**: a commit author whose email slot holds a
+  handle (`alice@1sat.name` or `@alice@1sat.name`) is shown as a verified
+  `@alice@1sat.name` when that domain resolves the handle to the identity key
+  that signed the head being viewed. Nothing is added to the head token and
+  nothing is required of users; the same commit on someone else's head shows
+  the author as plain text, as git does.
+
 In-browser editing is a later revision. No social layer. Wallet operations in
 `lib/gib-wallet.ts` follow the gib CLI's conventions exactly (protocol
 `[1, "gib branch"]`, keyID = root outpoint, basket `gib`, `origin:`/`branch:`
@@ -58,6 +65,7 @@ block to `/manifest.json` so the 1Sat desktop wallet trusts this origin.
 | Directory listing | `GET /content/{manifest}?raw=true` + `POST /1sat/ordfs/metadata` |
 | File bytes (patches applied) | `GET /content/{root}/path` or `/content/{outpoint}` |
 | Your branches | wallet `listOutputs({ basket: "gib" })` → `/1sat/gib/head/{outpoint}` |
+| Author handles | `https://<domain>/manifest.json` → `metanet.handles.resolve?handle=` (server-side, cached per `ttl`) |
 
 Refs in URLs are head outpoints (immutable), so links never rot; a branch name
 is accepted too and resolves to its current head.

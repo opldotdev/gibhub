@@ -4,10 +4,12 @@ import type { ReactNode } from "react";
 import { Activity } from "@/components/activity";
 import { BranchButton } from "@/components/branch-button";
 import { ExplorerLink } from "@/components/explorer-link";
+import { HandleLink } from "@/components/handle-link";
 import { IdentityLink } from "@/components/identity-link";
 import { Badge } from "@/components/ui/badge";
 import { firstLine, shortOutpoint, shortSha, timeAgo } from "@/lib/format";
 import type { HeadRecord } from "@/lib/gib-api";
+import type { AuthorHandles } from "@/lib/handles";
 import { routes } from "@/lib/routes";
 
 /** A list of pushes (commit heads), newest first. */
@@ -18,6 +20,7 @@ export function HeadList({
 	empty = "No pushes yet.",
 	actions,
 	branchable = false,
+	handles,
 }: {
 	heads: HeadRecord[];
 	showRepo?: boolean;
@@ -27,6 +30,11 @@ export function HeadList({
 	actions?: (head: HeadRecord) => ReactNode;
 	/** Offer "Branch" on each head (usable from server components). */
 	branchable?: boolean;
+	/**
+	 * Verified BRC-169 author handles by head outpoint (see lib/handles).
+	 * Absent entries render the author as plain text, as git shows it.
+	 */
+	handles?: AuthorHandles;
 }) {
 	if (heads.length === 0) {
 		return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -36,6 +44,7 @@ export function HeadList({
 			{heads.map((head) => {
 				const deleted = head.spend && !head.spend.next;
 				const subject = firstLine(head.commit?.message);
+				const handle = handles?.[head.outpoint];
 				return (
 					<li key={head.outpoint} className="p-3 flex gap-3 items-start">
 						<div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -71,8 +80,14 @@ export function HeadList({
 									</Link>
 								)}
 								<IdentityLink identity={head.identity} />
-								{head.commit?.author?.name && (
-									<span>as {head.commit.author.name}</span>
+								{handle ? (
+									<span className="flex items-center gap-1">
+										as <HandleLink handle={handle} />
+									</span>
+								) : (
+									head.commit?.author?.name && (
+										<span>as {head.commit.author.name}</span>
+									)
 								)}
 								<span>
 									{head.commit?.author?.time ? (

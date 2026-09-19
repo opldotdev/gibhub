@@ -1,6 +1,7 @@
 import { HeadList } from "@/components/head-list";
 import { RepoList } from "@/components/repo-list";
 import { listHeads, listRepos } from "@/lib/gib-api";
+import { authorHandles } from "@/lib/handles-server";
 
 export const revalidate = 30;
 
@@ -9,6 +10,7 @@ export default async function ExplorePage() {
 		listRepos({ limit: 20 }),
 		listHeads({ limit: 20 }),
 	]);
+	const handles = await authorHandles(pushes);
 	return (
 		<div className="grid gap-8 lg:grid-cols-[3fr_2fr]">
 			<section>
@@ -20,7 +22,12 @@ export default async function ExplorePage() {
 			</section>
 			<section>
 				<h2 className="text-lg font-semibold mb-3">Recent pushes</h2>
-				<HeadList heads={pushes} showRepo empty="No pushes indexed yet." />
+				<HeadList
+					heads={pushes}
+					handles={handles}
+					showRepo
+					empty="No pushes indexed yet."
+				/>
 			</section>
 		</div>
 	);

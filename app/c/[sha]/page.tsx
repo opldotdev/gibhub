@@ -5,6 +5,7 @@ import { CopyButton } from "@/components/copy-button";
 import { HeadList } from "@/components/head-list";
 import { firstLine, messageBody, shortSha, timeAgo } from "@/lib/format";
 import { getCommit } from "@/lib/gib-api";
+import { authorHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
@@ -36,6 +37,9 @@ export default async function CommitShaPage({ params }: { params: Params }) {
 	if (!node) notFound();
 
 	const commit = node.heads.find((h) => h.commit)?.commit;
+	// The summary above the lists has no head context, so its author stays
+	// plain text; each head in the lists is verified against its own signer.
+	const handles = await authorHandles([...node.heads, ...node.children]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -87,6 +91,7 @@ export default async function CommitShaPage({ params }: { params: Params }) {
 				</h2>
 				<HeadList
 					heads={node.heads}
+					handles={handles}
 					showRepo
 					empty="No indexed head carries this commit; it is only known as a parent."
 				/>
@@ -99,6 +104,7 @@ export default async function CommitShaPage({ params }: { params: Params }) {
 				</h2>
 				<HeadList
 					heads={node.children}
+					handles={handles}
 					showRepo
 					empty="Nothing indexed builds on this commit yet."
 				/>
