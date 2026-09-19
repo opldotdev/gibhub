@@ -4,6 +4,7 @@ import { useWallet } from "@1sat/react";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import Link from "next/link";
+import { DeleteBranchButton } from "@/components/delete-branch-button";
 import { HeadList } from "@/components/head-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -126,7 +127,10 @@ export function MyRepos() {
 							{shortOutpoint(origin)}
 						</Link>
 					</h2>
-					<HeadList heads={heads} />
+					<HeadList
+						heads={heads}
+						actions={(h) => <DeleteBranchButton head={h} />}
+					/>
 				</section>
 			))}
 			{pending.length > 0 && (

@@ -32,6 +32,8 @@ bun test
 - Outpoints are `txid_vout` everywhere in this codebase; convert at the boundary
   with `toOrdinalOutpoint`.
 - Identity display is the raw key via `IdentityLink`; a name registry fronts it later.
-- Do not add manifest/patch/token decoding here: that belongs to the `@1sat` SDK.
-  `lib/ordfs.ts#decodeBinaryManifest` is the adapter point.
+- Manifest decoding comes from `@1sat/actions` (`dirDecode`); do not reimplement it.
+  `lib/gib-wallet.ts` mints/burns heads with the CLI's exact conventions; keep them in sync with gib-cli `src/token.ts`.
+- `next.config.ts` stubs `xdelta3-wasm` in the browser bundle; the site never applies patches itself.
+- `@1sat/actions` is a vendored tarball of 1sat-sdk PR #77 until it publishes (see README).
 - Tabs, double quotes (Biome). Bun, not npm.

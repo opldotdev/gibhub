@@ -1,5 +1,6 @@
 import { FolderTree, Trash2 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Activity } from "@/components/activity";
 import { IdentityLink } from "@/components/identity-link";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +14,14 @@ export function HeadList({
 	showRepo = false,
 	showBranch = true,
 	empty = "No pushes yet.",
+	actions,
 }: {
 	heads: HeadRecord[];
 	showRepo?: boolean;
 	showBranch?: boolean;
 	empty?: string;
+	/** Per-head controls rendered on the right (client components only). */
+	actions?: (head: HeadRecord) => ReactNode;
 }) {
 	if (heads.length === 0) {
 		return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -75,6 +79,7 @@ export function HeadList({
 							</div>
 						</div>
 						<div className="flex items-center gap-2 text-xs font-mono text-muted-foreground shrink-0">
+							{actions?.(head)}
 							{head.commit?.sha && (
 								<Link
 									href={routes.commit(head.origin, head.outpoint)}

@@ -16,8 +16,15 @@ overlay (`/1sat/gib`).
 - **My repos**: connect a BRC-100 wallet and see the commit heads in your
   `gib` basket, resolved through the overlay.
 
-Fork and branch delete land with the `@1sat` gib token template; in-browser
-editing is a later revision. No social layer.
+- **Fork**: publishes a new root manifest citing the forked tree's outpoints
+  (no content copied) and mints a head for it. The new manifest is the fork's
+  origin; the forked commit object is reused verbatim.
+- **Delete**: burns a branch head you own (spend with no successor).
+
+In-browser editing is a later revision. No social layer. Wallet operations in
+`lib/gib-wallet.ts` follow the gib CLI's conventions exactly (protocol
+`[1, "gib branch"]`, keyID = root outpoint, basket `gib`, `origin:`/`branch:`
+tags, `push:<sha>` labels, commit object inscribed after the PushDrop lock).
 
 ## Stack
 

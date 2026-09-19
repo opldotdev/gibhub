@@ -2,6 +2,7 @@ import { GitBranch, History } from "lucide-react";
 import Link from "next/link";
 import { BranchPicker } from "@/components/branch-picker";
 import { CopyButton } from "@/components/copy-button";
+import { ForkButton } from "@/components/fork-button";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
 import type { HeadRecord, RepoRecord } from "@/lib/gib-api";
@@ -37,6 +38,7 @@ export function RepoHeader({
 			</div>
 			<div className="flex items-center gap-3 flex-wrap text-sm">
 				<BranchPicker origin={repo.origin} heads={heads} current={current} />
+				{current && <ForkButton head={current} />}
 				<nav className="flex items-center gap-1 ml-auto">
 					<Tab
 						href={

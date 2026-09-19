@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
 	reactCompiler: true,
+	// @1sat/actions lazily imports xdelta3-wasm (vcdiff) whose Node loader
+	// requires "fs". The site never applies patches client-side (ORDFS does),
+	// so stub it in the browser bundle.
+	turbopack: {
+		resolveAlias: {
+			"xdelta3-wasm": { browser: "./lib/empty.ts" },
+		},
+	},
 	async headers() {
 		return [
 			{
