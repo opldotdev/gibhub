@@ -14,10 +14,10 @@ import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
 
-type Params = Promise<{ origin: string; headRef: string; path?: string[] }>;
+type Params = Promise<{ origin: string; ref: string; path?: string[] }>;
 
 export default async function TreePage({ params }: { params: Params }) {
-	const { origin: rawOrigin, headRef, path: rawPath = [] } = await params;
+	const { origin: rawOrigin, ref: headRef, path: rawPath = [] } = await params;
 	const origin = toOrdinalOutpoint(rawOrigin);
 	const path = rawPath.map(decodeURIComponent);
 
