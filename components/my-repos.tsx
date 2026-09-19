@@ -9,7 +9,8 @@ import { HeadList } from "@/components/head-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
-import { getHead, type HeadRecord } from "@/lib/gib-api";
+import type { HeadRecord } from "@/lib/gib-api";
+import { decodeHeadScript } from "@/lib/gib-head";
 import { loadRepoMeta } from "@/lib/ordfs";
 import { routes } from "@/lib/routes";
 import { GIB_BASKET } from "@/lib/stack";
@@ -39,9 +40,9 @@ function OriginName({ origin }: { origin: string }) {
 }
 
 /**
- * The connected wallet's own branches: every coin in the gib basket, looked
- * up in the overlay so the decoded head (branch, root, commit) comes from
- * one place. Coins the overlay has not indexed yet are listed by outpoint.
+ * The connected wallet's own branches: every coin in the gib basket, decoded
+ * locally from its locking script. Coins that do not decode as gib heads
+ * are listed by outpoint.
  */
 export function MyRepos() {
 	const { wallet, status, identityKey, connect } = useWallet();
@@ -51,21 +52,32 @@ export function MyRepos() {
 		enabled: status === "connected" && !!wallet,
 		queryFn: async (): Promise<BasketHead[]> => {
 			if (!wallet) return [];
+			// Every head is decoded from the wallet's own copy of the locking
+			// script: origin, branch, root, identity, and the inscribed commit.
+			// No overlay round trip; a repo you published is yours to see even
+			// if no indexer has caught up.
 			const list = await wallet.listOutputs({
 				basket: GIB_BASKET,
+				include: "locking scripts",
 				includeTags: true,
 				limit: 1000,
 			});
-			const outpoints = list.outputs
+			return list.outputs
 				.filter((o) => o.spendable !== false)
-				.map((o) => toOrdinalOutpoint(o.outpoint));
-			const heads = await Promise.all(
-				outpoints.map(async (outpoint) => ({
-					outpoint,
-					head: await getHead(outpoint).catch(() => null),
-				})),
-			);
-			return heads.sort((a, b) => (b.head?.score ?? 0) - (a.head?.score ?? 0));
+				.map((o) => {
+					const outpoint = toOrdinalOutpoint(o.outpoint);
+					return {
+						outpoint,
+						head: o.lockingScript
+							? (decodeHeadScript(o.lockingScript, outpoint) ?? null)
+							: null,
+					};
+				})
+				.sort(
+					(a, b) =>
+						(b.head?.commit?.author?.time ?? 0) -
+						(a.head?.commit?.author?.time ?? 0),
+				);
 		},
 	});
 
@@ -152,10 +164,9 @@ export function MyRepos() {
 			))}
 			{pending.length > 0 && (
 				<section>
-					<h2 className="font-medium mb-2">Not indexed yet</h2>
+					<h2 className="font-medium mb-2">Unrecognised coins</h2>
 					<p className="text-xs text-muted-foreground mb-2">
-						These basket coins are not in the overlay yet. They show up once the
-						push is seen by the stack.
+						These coins are in the gib basket but do not decode as commit heads.
 					</p>
 					<ul className="border divide-y text-sm font-mono">
 						{pending.map((b) => (
