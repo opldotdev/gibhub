@@ -2,6 +2,7 @@ import { FolderTree } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Activity } from "@/components/activity";
+import { BranchButton } from "@/components/branch-button";
 import { CopyButton } from "@/components/copy-button";
 import { HeadList } from "@/components/head-list";
 import { IdentityLink } from "@/components/identity-link";
@@ -74,11 +75,14 @@ export default async function CommitPage({ params }: { params: Params }) {
 						<span>
 							<Activity score={head.score} />
 						</span>
-						<Button asChild variant="outline" size="sm" className="ml-auto">
-							<Link href={routes.tree(origin, head.outpoint)}>
-								<FolderTree className="size-4" /> Browse files
-							</Link>
-						</Button>
+						<span className="ml-auto flex items-center gap-2">
+							<BranchButton head={head} />
+							<Button asChild variant="outline" size="sm">
+								<Link href={routes.tree(origin, head.outpoint)}>
+									<FolderTree className="size-4" /> Browse files
+								</Link>
+							</Button>
+						</span>
 					</div>
 				</div>
 				<dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 p-4 text-sm">

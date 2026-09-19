@@ -1,5 +1,5 @@
 /**
- * Wallet-side gib operations: fork (new genesis + head) and delete (burn).
+ * Wallet-side gib operations: branch (new head on the same origin) and delete (burn).
  *
  * Conventions mirror the gib CLI exactly so heads minted here are
  * indistinguishable from CLI pushes: PushDrop protocol `[1, "gib branch"]`,
@@ -11,16 +11,9 @@
  */
 
 import {
-	buildDataScript,
 	completeSignedAction,
-	DIR_CONTENT_TYPE,
-	DIR_VERSION,
-	dirEncode,
-	dirEntryNameCompare,
-	dirName,
 	pushDropCustomInstructions,
 	pushDropLock,
-	type DirEntry as SdkDirEntry,
 	stampManagedOutputIds,
 	unlockByScript,
 } from "@1sat/actions";
@@ -33,7 +26,7 @@ import {
 } from "@bsv/sdk";
 import { outpointTxid, outpointVout, toOrdinalOutpoint } from "./format";
 import type { HeadRecord } from "./gib-api";
-import { contentUrl, loadDirectory } from "./ordfs";
+import { contentUrl } from "./ordfs";
 import { GIB_BASKET } from "./stack";
 
 export const GIB_PROTOCOL: WalletProtocol = [1, "gib branch"];
@@ -186,60 +179,30 @@ export async function burnHead(
 }
 
 /**
- * Forks a repository at a head: publishes a new root manifest whose entries
- * cite the forked tree's outpoints (no content copied), then mints a head
- * for it. The new manifest's outpoint is the fork's origin. The forked
- * head's commit object is reused verbatim since the tree is identical.
+ * Publishes a new branch on the same repository from an existing head: a
+ * head under the connected wallet's identity, same origin, same root, same
+ * commit object (fetched from ORDFS and reused verbatim). No content is
+ * copied and no new origin is minted; the shared DAG shows how it relates.
  */
-export async function forkRepo(
+export async function branchFromHead(
 	wallet: WalletInterface,
 	head: HeadRecord,
+	branch: string,
 	identity: string,
 ): Promise<{ origin: string; head: string }> {
-	const entries = await loadDirectory(head.root);
-	const manifest: SdkDirEntry[] = entries.map((e) => ({
-		name: dirName(e.name),
-		isDir: e.kind === "dir",
-		exec: e.exec,
-		symlink: e.symlink,
-		ref: {
-			kind: "outpoint",
-			txid: outpointTxid(e.outpoint),
-			vout: outpointVout(e.outpoint),
-		},
-	}));
-	manifest.sort(dirEntryNameCompare);
-	const rootBytes = dirEncode({ version: DIR_VERSION, entries: manifest });
-
+	const name = branch.trim();
+	if (!name) throw new Error("branch name is required");
 	const commitRes = await fetch(contentUrl(head.outpoint));
 	if (!commitRes.ok) {
 		throw new Error(`could not fetch the commit object (${commitRes.status})`);
 	}
 	const commitBytes = new Uint8Array(await commitRes.arrayBuffer());
-	const sha = head.commit?.sha ?? "fork";
-	const labels = [pushLabel(sha)];
-
-	const content = await wallet.createAction({
-		description: `gib fork of ${head.branch}`.slice(0, 50),
-		outputs: [
-			{
-				lockingScript: buildDataScript(rootBytes, DIR_CONTENT_TYPE).toHex(),
-				satoshis: 0,
-				outputDescription: "gib root manifest",
-			},
-		],
-		labels,
-		options: { randomizeOutputs: false },
-	});
-	if (!content.txid)
-		throw new Error("wallet returned no txid for the manifest");
-	const root = `${content.txid}_0`;
-
+	const labels = [pushLabel(head.commit?.sha ?? "branch")];
 	const minted = await mintHead(
 		wallet,
-		{ origin: root, branch: head.branch, root, identity },
+		{ origin: head.origin, branch: name, root: head.root, identity },
 		commitBytes,
 		labels,
 	);
-	return { origin: root, head: minted.outpoint };
+	return { origin: head.origin, head: minted.outpoint };
 }

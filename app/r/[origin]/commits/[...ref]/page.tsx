@@ -55,6 +55,7 @@ export default async function CommitsPage({
 				heads={data.history}
 				showBranch={false}
 				empty="No pushes on this branch."
+				branchable
 			/>
 			{more && (
 				<div className="mt-4">

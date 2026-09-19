@@ -20,10 +20,11 @@ overlay (`/1sat/gib`).
 - **My repos**: connect a BRC-100 wallet and see the commit heads in your
   `gib` basket, resolved through the overlay.
 
-- **Fork**: publishes a new root manifest citing the forked tree's outpoints
-  (no content copied) and mints a head for it. The new manifest is the fork's
-  origin; the forked commit object is reused verbatim.
-- **Delete**: burns a branch head you own (spend with no successor).
+- **Branch**: publishes a head under your identity on the same repository,
+  pointing at an existing commit (the commit object is reused verbatim, no
+  content copied, no new origin). The name is prompted, defaulting to the
+  source branch. Fork-as-new-origin was removed: a detached copy is a CLI
+  operation on a fresh `gib init`.
 
 In-browser editing is a later revision. No social layer. Wallet operations in
 `lib/gib-wallet.ts` follow the gib CLI's conventions exactly (protocol
