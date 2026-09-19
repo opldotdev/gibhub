@@ -33,6 +33,8 @@ export interface DirEntry {
 	symlink?: boolean;
 	contentType?: string;
 	size?: number;
+	/** The entry is an ordfs/patch chain; type and size are of the resolved file. */
+	patched?: boolean;
 }
 
 export interface OrdfsMetadata {
@@ -178,19 +180,31 @@ export async function loadDirectory(
 		);
 	}
 
-	const entries: DirEntry[] = raw.map((e) => {
-		const m = meta[e.outpoint];
-		const contentType = m?.contentType ? baseType(m.contentType) : undefined;
-		return {
-			name: e.name,
-			outpoint: e.outpoint,
-			kind: (e.isDir ?? isManifestType(contentType)) ? "dir" : "file",
-			exec: e.exec,
-			symlink: e.symlink,
-			contentType,
-			size: m?.contentLength,
-		};
-	});
+	const entries: DirEntry[] = await Promise.all(
+		raw.map(async (e): Promise<DirEntry> => {
+			const m = meta[e.outpoint];
+			let contentType = m?.contentType ? baseType(m.contentType) : undefined;
+			let size = m?.contentLength;
+			let patched = false;
+			if (contentType === PATCH_TYPE) {
+				// Metadata describes the record; the gateway resolves the chain.
+				const resolved = await resolvedHead(e.outpoint);
+				contentType = resolved.contentType ?? contentType;
+				size = resolved.size ?? size;
+				patched = true;
+			}
+			return {
+				name: e.name,
+				outpoint: e.outpoint,
+				kind: (e.isDir ?? isManifestType(contentType)) ? "dir" : "file",
+				exec: e.exec,
+				symlink: e.symlink,
+				contentType,
+				size,
+				patched,
+			};
+		}),
+	);
 	// Directories first, like every code host.
 	return entries.sort((a, b) =>
 		a.kind === b.kind
@@ -199,6 +213,22 @@ export async function loadDirectory(
 				? -1
 				: 1,
 	);
+}
+
+/** HEAD on the content route: type and length of the resolved (patch-applied) file. */
+async function resolvedHead(
+	outpoint: string,
+): Promise<{ contentType?: string; size?: number }> {
+	const res = await fetch(contentUrl(outpoint), {
+		method: "HEAD",
+		...serverFetchInit(3600),
+	});
+	if (!res.ok) return {};
+	const length = res.headers.get("content-length");
+	return {
+		contentType: baseType(res.headers.get("content-type")) || undefined,
+		size: length ? Number.parseInt(length, 10) : undefined,
+	};
 }
 
 /**
