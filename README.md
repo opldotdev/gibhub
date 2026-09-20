@@ -57,6 +57,14 @@ bun run lint && bun run typecheck && bun run build
 enabled. `NEXT_PUBLIC_TRUST_PUBLIC_KEY`, when set, adds a `babbage.trust`
 block to `/manifest.json` so the 1Sat desktop wallet trusts this origin.
 
+`/manifest.json` also carries a BRC-73 `permissions` block, so a BRC-100
+wallet asks once, as one grouped request, for everything the site needs:
+the identity key, protocol `gib branch`, basket `gib`, the `gib push` and
+`gib delete` action labels, and a spending authorization for minting heads.
+
+Working on the code: [AGENTS.md](AGENTS.md), and
+[skills/gibhub](skills/gibhub/SKILL.md) for agents.
+
 ## Data flow
 
 | Need | Source |
