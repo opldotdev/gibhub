@@ -263,9 +263,16 @@ verified BRC-169 handle in front of it when there is one.
 ## Wallet permissions
 
 `app/manifest.json/route.ts` serves the site manifest, which carries a
-BRC-73 `permissions` block. A BRC-100 wallet fetches
-`https://gibhub.net/manifest.json` when the app first connects and asks for
-everything in it as one grouped request.
+BRC-73 grouped permission block. A BRC-100 wallet fetches
+`https://<originator>/manifest.json` — the origin root, nothing else — and
+asks for everything in it as one grouped request instead of prompting per
+call.
+
+The reader is `WalletPermissionsManager.fetchManifestPermissions` in
+`@bsv/wallet-toolbox` (bundled into `@1sat/connect`, which is what this
+site's wallets run). It reads `manifest.metanet || manifest.babbage` and
+then `.groupPermissions`, and **validates nothing** — a misshapen entry is
+carried into the prompt and fails later, or is silently dropped.
 
 Declare exactly what the code calls and nothing more; an over-broad
 manifest is worse than none. The current set is derived from
@@ -273,15 +280,38 @@ manifest is worse than none. The current set is derived from
 
 | Declared | Because |
 | --- | --- |
-| protocol `identity key retrieval`, level 1, counterparty `self` | `getPublicKey({ identityKey: true })` on connect. |
-| protocol `gib branch`, level 1, counterparty `anyone` | `pushDropLock` and `unlockByScript` sign under `[1, "gib branch"]`. |
+| protocol `[1, "identity key retrieval"]` | `getPublicKey({ identityKey: true })` on connect. |
+| protocol `[1, "gib branch"]` | `pushDropLock` and `unlockByScript` sign under it. |
+| protocol `[1, "action label gib push"]` | `mintHead`'s action label. |
+| protocol `[1, "action label gib delete"]` | `burnHead`'s action label. |
 | basket `gib` | `listOutputs({ basket: "gib" })` on `/me`, and every minted head is filed there. |
-| label `gib push` | `mintHead`. |
-| label `gib delete` | `burnHead`. |
-| spending authorization | `mintHead` creates a 1-satoshi output the wallet funds, and both actions pay fees. |
+| `spendingAuthorization`, 10 000 sat | `createAction` computes a net spend > 0 — a 1-satoshi head plus fees — and calls `ensureSpendingAuthorization`. A monthly allowance, counted per calendar month. |
 
-`babbage.trust` is added when `NEXT_PUBLIC_TRUST_PUBLIC_KEY` is set, so a
-desktop wallet can treat this origin as trusted.
+Three things about that list are not guessable and are easy to get wrong:
+
+- **Action labels are not a category.** `GroupedPermissions` has exactly
+  `description`, `spendingAuthorization`, `protocolPermissions`,
+  `basketAccess` and `certificateAccess`. The manager gates label `x` as
+  the level-1 protocol `action label x`, so that is how `gib push` and
+  `gib delete` are declared.
+- **Level-1 entries carry no counterparty.** The manager forces
+  counterparty to `""` for level 1, so a declared one is ignored — and a
+  literal `""` is a reserved slot that drops the entry. Every entry here is
+  level 1, so none of them has a counterparty, even though `gib-wallet.ts`
+  signs with counterparty `anyone`.
+- **No extra keys.** The grant path compares granted entries to requested
+  ones with a deep equality check, and the requested entries are these
+  literal objects. A non-spec field (`operations`, say) rides into the
+  prompt and can make the grant throw.
+
+`babbage.trust` stays under `babbage` when `NEXT_PUBLIC_TRUST_PUBLIC_KEY`
+is set, because the 1Sat desktop wallet's trusted-origin check reads
+`manifest.babbage.trust` directly. Permissions go under `metanet`, which is
+BRC-73's canonical namespace; `babbage` is only the legacy fallback.
+
+A failed fetch — 404, CORS, bad JSON — is cached by the wallet as "no
+manifest" for five minutes, so a broken manifest looks like no manifest
+until that expires.
 
 Changing an action label, a protocol name, or the basket invalidates every
 user's existing grants and every user's entry in their wallet's permission
@@ -330,3 +360,13 @@ not.
 does not prerender repository pages (they are dynamic), but `bun dev`
 against a stack that is down looks like a site-wide 500. Check
 `STACK_URL` first.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -101,10 +101,14 @@ length for up to 100 outpoints at a time.
 calls `getPublicKey({ identityKey: true })`. Minting and burning go through
 `lib/gib-wallet.ts`, which mirrors the gib CLI's conventions exactly so a
 head minted in the browser is indistinguishable from a CLI push.
-`/manifest.json` declares the whole permission set as one BRC-73 grouped
-request: the identity key protocol, protocol `gib branch`, basket `gib`,
-labels `gib push` and `gib delete`, and a spending authorization for the
-1-satoshi head plus fees.
+`/manifest.json` declares the whole permission set under
+`metanet.groupPermissions` as one BRC-73 grouped request: protocols
+`[1, "identity key retrieval"]`, `[1, "gib branch"]`,
+`[1, "action label gib push"]` and `[1, "action label gib delete"]`, basket
+`gib`, and a spending authorization for the 1-satoshi head plus fees.
+Action labels have no category of their own — the wallet gates label `x` as
+the level-1 protocol `action label x` — and level-1 entries carry no
+counterparty.
 
 `/me` decodes heads from the wallet's own locking scripts
 (`lib/gib-head.ts`), so it works before any indexer has caught up.
