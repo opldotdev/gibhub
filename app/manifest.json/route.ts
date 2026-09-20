@@ -1,4 +1,4 @@
-import { APP_URL } from "@/lib/stack";
+import { APP_URL, stackApiUrl } from "@/lib/stack";
 
 /**
  * `/manifest.json` — the web app manifest, plus the two wallet-facing blocks
@@ -11,6 +11,11 @@ import { APP_URL } from "@/lib/stack";
  * @bsv/wallet-toolbox, which reads `manifest.metanet || manifest.babbage`
  * and then `.groupPermissions`, and validates nothing — an entry in the
  * wrong shape is silently carried into the prompt.
+ *
+ * `metanet.overlays` is BRC-180: the overlay services this domain hosts,
+ * mapped to the base URL a client resolves their routes against. gibhub's
+ * overlay is the 1Sat stack, so the value is derived from STACK_URL rather
+ * than written out again.
  *
  * `babbage.trust`, when NEXT_PUBLIC_TRUST_PUBLIC_KEY is set, is the separate
  * trusted-origin block the 1Sat desktop wallet reads (name + publicKey).
@@ -67,6 +72,26 @@ const groupPermissions = {
 	],
 };
 
+/**
+ * BRC-180 `metanet.overlays`. The keys are the gib topic manager and lookup
+ * service as 1sat-stack names them (`TopicName` / `LookupName` in
+ * `pkg/gib/config.go`), and the site declares only those two — the stack
+ * hosts other overlays, but gibhub has nothing to do with them.
+ *
+ * The value is the BRC-22/BRC-24 base, not the stack root. 1sat-stack mounts
+ * the engine routes a conforming client needs — `/submit`, `/lookup`,
+ * `/listTopicManagers`, `/listLookupServiceProviders` — under
+ * `/1sat/gib/overlay`; at the stack root they are 404. The gib CLI agrees:
+ * `internal/remote/client.go` holds a host-only `Base` and appends its own
+ * `OverlayPath = "/1sat/gib/overlay"` before submitting. The stack's plain
+ * REST routes (`/1sat/gib/heads`) and ORDFS content (`/content/…`) resolve
+ * against the root instead, but those are not what BRC-180 keys name.
+ */
+const overlays = {
+	tm_gib: stackApiUrl("/1sat/gib/overlay"),
+	ls_gib: stackApiUrl("/1sat/gib/overlay"),
+};
+
 export function GET() {
 	const manifest: Record<string, unknown> = {
 		name: "gibhub",
@@ -77,7 +102,7 @@ export function GET() {
 		theme_color: "#030404",
 		description: "Browse git repositories published on BSV with gib.",
 		icons: [{ src: "/gibhub.svg", sizes: "any", type: "image/svg+xml" }],
-		metanet: { schemaVersion: 1, groupPermissions },
+		metanet: { schemaVersion: 1, groupPermissions, overlays },
 	};
 	const publicKey = process.env.NEXT_PUBLIC_TRUST_PUBLIC_KEY;
 	if (publicKey) {

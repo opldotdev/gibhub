@@ -70,7 +70,7 @@ deploy; there is no separate release step.
 | `/u/[identity]` | A publisher: repositories and pushes under one 66-hex identity key. |
 | `/me` | The connected wallet's own branches (`components/my-repos.tsx`). Client-only. |
 | `/api/handles` | `GET ?handle=…` — BRC-169 resolution through the server's shared cache. |
-| `/manifest.json` | Web app manifest, the BRC-73 grouped permissions block, and `babbage.trust`. |
+| `/manifest.json` | Web app manifest, the BRC-73 grouped permissions block, the BRC-180 overlay declaration, and `babbage.trust`. |
 
 `app/layout.tsx` wraps everything in `ThemeProvider` → `QueryProvider` →
 `WalletProvider` and the site header/footer. `app/error.tsx` and
@@ -303,6 +303,34 @@ Three things about that list are not guessable and are easy to get wrong:
   ones with a deep equality check, and the requested entries are these
   literal objects. A non-spec field (`operations`, say) rides into the
   prompt and can make the grant throw.
+
+### BRC-180 overlay declaration
+
+The same manifest carries `metanet.overlays`: a map from overlay service
+name to the base URL a client resolves that service's routes against. It
+tells a client what *this domain* hosts, which is a different question from
+BRC-88 SHIP ("who on the network serves this topic").
+
+gibhub declares exactly two, the gib topic manager and lookup service the
+1Sat stack runs — `tm_gib` and `ls_gib`, named as `TopicName` and
+`LookupName` in 1sat-stack's `pkg/gib/config.go`. The stack hosts other
+overlays; the site has nothing to do with them and must not declare them.
+
+**The value is `${STACK_URL}/1sat/gib/overlay`, not `STACK_URL`.** This is
+the one thing that is easy to get wrong. BRC-180 keys name BRC-22 topic
+managers and BRC-24 lookup services, so the base has to be where those
+routes live: 1sat-stack mounts `/submit`, `/lookup`,
+`/listTopicManagers` and `/listLookupServiceProviders` under
+`/1sat/gib/overlay`, and at the stack root they 404. The stack's plain REST
+routes (`/1sat/gib/heads`, `/1sat/beef/{txid}`) and ORDFS `/content/…`
+*do* resolve against the root, which is what makes the mistake tempting —
+but a BRC-180 consumer is not calling those. The Go CLI splits it the same
+way: `internal/remote/client.go` keeps a host-only `Base` and appends its
+own `OverlayPath = "/1sat/gib/overlay"` to submit.
+
+Both values are built with `stackApiUrl` from `lib/stack.ts`, so the
+manifest follows `NEXT_PUBLIC_ONESAT_STACK_URL` and the hostname is never
+written down twice.
 
 `babbage.trust` stays under `babbage` when `NEXT_PUBLIC_TRUST_PUBLIC_KEY`
 is set, because the 1Sat desktop wallet's trusted-origin check reads

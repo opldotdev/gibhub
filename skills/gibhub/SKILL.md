@@ -39,7 +39,7 @@ and burn branch heads.
 | `/u/[identity]` | One publisher's repositories and pushes. |
 | `/me` | The connected wallet's own branches. |
 | `/api/handles` | BRC-169 resolution through the server's shared cache. |
-| `/manifest.json` | Web app manifest, BRC-73 grouped permissions, `babbage.trust`. |
+| `/manifest.json` | Web app manifest, BRC-73 grouped permissions, BRC-180 `metanet.overlays`, `babbage.trust`. |
 
 `[ref]` in a generated link is always a head outpoint, so links never rot.
 A branch name is accepted and resolves to that branch's current head.
@@ -109,6 +109,11 @@ head minted in the browser is indistinguishable from a CLI push.
 Action labels have no category of their own — the wallet gates label `x` as
 the level-1 protocol `action label x` — and level-1 entries carry no
 counterparty.
+
+The same manifest declares BRC-180 `metanet.overlays`: exactly `tm_gib` and
+`ls_gib`, both pointing at `${STACK_URL}/1sat/gib/overlay` via `stackApiUrl`
+— the BRC-22/24 engine mount, not the stack root, where `/submit` and
+`/lookup` would 404. Declare no overlay the site does not use.
 
 `/me` decodes heads from the wallet's own locking scripts
 (`lib/gib-head.ts`), so it works before any indexer has caught up.
