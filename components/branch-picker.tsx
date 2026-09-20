@@ -15,10 +15,13 @@ export function BranchPicker({
 	origin,
 	heads,
 	current,
+	labels = {},
 }: {
 	origin: string;
 	heads: HeadRecord[];
 	current?: HeadRecord;
+	/** Verified handle per identity key, used instead of the key when disambiguating. */
+	labels?: Record<string, string>;
 }) {
 	const router = useRouter();
 	const dupes = new Set(
@@ -44,7 +47,9 @@ export function BranchPicker({
 				{heads.map((h) => (
 					<option key={h.outpoint} value={h.outpoint}>
 						{h.branch}
-						{dupes.has(h.branch) ? ` (${shortKey(h.identity)})` : ""}
+						{dupes.has(h.branch)
+							? ` (${labels[h.identity] ?? shortKey(h.identity)})`
+							: ""}
 					</option>
 				))}
 				{heads.length === 0 && !current && (

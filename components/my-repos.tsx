@@ -11,6 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
 import type { HeadRecord } from "@/lib/gib-api";
 import { decodeHeadScript } from "@/lib/gib-head";
+import {
+	authorHandleKeys,
+	matchAuthorHandles,
+	type ResolvedHandle,
+} from "@/lib/handles";
 import { loadRepoMeta } from "@/lib/ordfs";
 import { routes } from "@/lib/routes";
 import { GIB_BASKET } from "@/lib/stack";
@@ -80,6 +85,26 @@ export function MyRepos() {
 				);
 		},
 	});
+
+	const heads = (query.data ?? [])
+		.map((b) => b.head)
+		.filter((h): h is HeadRecord => !!h);
+	const handleKeys = authorHandleKeys(heads);
+	// Resolution runs on the server (/api/handles) so the domain fetches and
+	// cache are shared; the verification against each head's signer is local.
+	const resolvedQuery = useQuery({
+		queryKey: ["handles", handleKeys],
+		enabled: handleKeys.length > 0,
+		staleTime: 60_000,
+		queryFn: async (): Promise<Record<string, ResolvedHandle | null>> => {
+			const params = new URLSearchParams();
+			for (const key of handleKeys) params.append("handle", key);
+			const res = await fetch(`/api/handles?${params}`);
+			if (!res.ok) return {};
+			return res.json();
+		},
+	});
+	const handles = matchAuthorHandles(heads, (key) => resolvedQuery.data?.[key]);
 
 	if (status !== "connected") {
 		return (
@@ -158,6 +183,7 @@ export function MyRepos() {
 					</h2>
 					<HeadList
 						heads={heads}
+						handles={handles}
 						actions={(h) => <DeleteBranchButton head={h} />}
 					/>
 				</section>

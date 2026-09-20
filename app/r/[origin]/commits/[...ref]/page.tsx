@@ -5,6 +5,7 @@ import { RepoHeader } from "@/components/repo-header";
 import { Button } from "@/components/ui/button";
 import { toOrdinalOutpoint } from "@/lib/format";
 import { getBranch, getRepo } from "@/lib/gib-api";
+import { authorHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
@@ -34,6 +35,7 @@ export default async function CommitsPage({
 		}),
 	]);
 	if (!repo || !data) notFound();
+	const handles = await authorHandles(data.history);
 
 	const last = data.history[data.history.length - 1];
 	const more = data.history.length === PAGE && last;
@@ -53,6 +55,7 @@ export default async function CommitsPage({
 			</h2>
 			<HeadList
 				heads={data.history}
+				handles={handles}
 				showBranch={false}
 				empty="No pushes on this branch."
 				branchable

@@ -5,6 +5,7 @@ import { HeadList } from "@/components/head-list";
 import { RepoList } from "@/components/repo-list";
 import { shortKey } from "@/lib/format";
 import { listHeads, listReposByIdentity } from "@/lib/gib-api";
+import { authorHandles } from "@/lib/handles-server";
 
 export const revalidate = 30;
 
@@ -28,6 +29,7 @@ export default async function UserPage({ params }: { params: Params }) {
 		listReposByIdentity(identity, { limit: 50 }),
 		listHeads({ identity, limit: 20 }),
 	]);
+	const handles = await authorHandles(pushes);
 	return (
 		<div>
 			<div className="mb-6">
@@ -49,7 +51,7 @@ export default async function UserPage({ params }: { params: Params }) {
 				</section>
 				<section>
 					<h2 className="text-lg font-semibold mb-3">Recent pushes</h2>
-					<HeadList heads={pushes} showRepo />
+					<HeadList heads={pushes} handles={handles} showRepo />
 				</section>
 			</div>
 		</div>

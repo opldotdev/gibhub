@@ -32,6 +32,13 @@ bun test
 - Outpoints are `txid_vout` everywhere in this codebase; convert at the boundary
   with `toOrdinalOutpoint`.
 - Identity display is the raw key via `IdentityLink`; a name registry fronts it later.
+- BRC-169 handles (`lib/handles.ts`, `lib/handles-server.ts`): the handle is the
+  git author/committer email as written (`alice@1sat.name` or `@alice@1sat.name`).
+  It is "verified" only when the domain's resolve endpoint returns the identity
+  key that signed the head being viewed; otherwise the author is plain text.
+  Resolution is server-side with an in-memory cache (manifest + binding, ttl
+  clamped to 60 s..24 h, failures cached 5 min); the client reaches it via
+  `/api/handles`. No search, reverse, alias, messaging, or delegation.
 - Manifest decoding comes from `@1sat/actions` (`dirDecode`); do not reimplement it.
   `lib/gib-wallet.ts` mints/burns heads with the CLI's exact conventions; keep them in sync with gib-cli `src/token.ts`.
 - `next.config.ts` stubs `xdelta3-wasm` in the browser bundle; the site never applies patches itself.

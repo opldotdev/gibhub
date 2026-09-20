@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Activity } from "@/components/activity";
 import { BranchButton } from "@/components/branch-button";
 import { CopyButton } from "@/components/copy-button";
+import { HandleLink } from "@/components/handle-link";
 import { HeadList } from "@/components/head-list";
 import { IdentityLink } from "@/components/identity-link";
 import { RepoHeader } from "@/components/repo-header";
@@ -18,6 +19,8 @@ import {
 	toOrdinalOutpoint,
 } from "@/lib/format";
 import { getCommit, getHead, getRepo, type Signature } from "@/lib/gib-api";
+import type { VerifiedHandle } from "@/lib/handles";
+import { authorHandles, commitHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
 
 export const revalidate = 30;
@@ -38,6 +41,12 @@ export default async function CommitPage({ params }: { params: Params }) {
 		node?.heads.filter((h) => h.outpoint !== head.outpoint) ?? [];
 	const children = node?.children ?? [];
 	const deleted = head.spend && !head.spend.next;
+	// Handles are verified against this head's signer only; the same commit
+	// on another publisher's head is checked against that head in its list.
+	const [handles, related] = await Promise.all([
+		commitHandles(commit, head.identity),
+		authorHandles([...elsewhere, ...children]),
+	]);
 
 	return (
 		<div>
@@ -105,11 +114,11 @@ export default async function CommitPage({ params }: { params: Params }) {
 							))}
 							<Term>author</Term>
 							<dd>
-								<Person sig={commit.author} />
+								<Person sig={commit.author} handle={handles.author} />
 							</dd>
 							<Term>committer</Term>
 							<dd>
-								<Person sig={commit.committer} />
+								<Person sig={commit.committer} handle={handles.committer} />
 							</dd>
 						</>
 					)}
@@ -186,6 +195,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 						<HeadList
 							heads={elsewhere}
 							showRepo
+							handles={related}
 							empty="Only this head carries this commit."
 						/>
 					</section>
@@ -194,6 +204,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 						<HeadList
 							heads={children}
 							showRepo
+							handles={related}
 							empty="Nothing indexed builds on this commit yet."
 						/>
 					</section>
@@ -230,13 +241,26 @@ function ParentRow({ sha }: { sha: string }) {
 	);
 }
 
-function Person({ sig }: { sig?: Signature }) {
+/**
+ * A git signature. With a verified handle the email slot shows the handle
+ * (linked, with the verified mark); otherwise the raw `Name <email>`.
+ */
+function Person({ sig, handle }: { sig?: Signature; handle?: VerifiedHandle }) {
 	if (!sig) return <span className="text-muted-foreground">unknown</span>;
 	return (
 		<span>
 			{sig.name}
-			{sig.email && (
-				<span className="text-muted-foreground"> &lt;{sig.email}&gt;</span>
+			{handle ? (
+				<span className="text-muted-foreground">
+					{" "}
+					&lt;
+					<HandleLink handle={handle} className="text-foreground" />
+					&gt;
+				</span>
+			) : (
+				sig.email && (
+					<span className="text-muted-foreground"> &lt;{sig.email}&gt;</span>
+				)
 			)}
 			{sig.time > 0 && (
 				<span className="text-muted-foreground">

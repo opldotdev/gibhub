@@ -24,6 +24,7 @@ import { routes } from "@/lib/routes";
 export function branchNameError(name: string): string | undefined {
 	const n = name.trim();
 	if (!n) return "Enter a branch name.";
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: git forbids control bytes in ref names
 	if (/[\s~^:?*[\\]/.test(n) || /[\x00-\x1f\x7f]/.test(n))
 		return "No spaces or ~ ^ : ? * [ \\ in a branch name.";
 	if (n.startsWith("-") || n.startsWith("/") || n.endsWith("/"))
