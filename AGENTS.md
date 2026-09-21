@@ -87,8 +87,10 @@ branch's current head — see `lib/resolve-ref.ts`.
 | `stack.ts` | `STACK_URL` (`NEXT_PUBLIC_ONESAT_STACK_URL`, default `https://api.1sat.app`), `APP_URL`, and `GIB_BASKET`. |
 | `gib-api.ts` | Typed client for the overlay REST API under `/1sat/gib`. The `HeadRecord`, `RepoRecord`, `Commit` and `Spend` shapes. 404 → `null`, anything else throws. |
 | `ordfs.ts` | ORDFS reads: `/content/…` URLs, `ordfs/dir` manifest decoding, bulk metadata, path walking, text fetch, `.gib` metadata. |
+| `gib-lookup.ts` | The overlay's BRC-24 lookup service `ls_gib` at `/1sat/gib/overlay/lookup`. The `branches` query and its `BranchRecord` / `BranchesResult` shapes. |
+| `gib-submit.ts` | Handing a minted head to `tm_gib`: the submission BEEF (head transaction last) and the BRC-22 POST. |
 | `gib-wallet.ts` | The three wallet operations: `mintHead`, `burnHead`, `branchFromHead`. The token vocabulary lives here. |
-| `gib-head.ts` | Decodes a head from its own locking script — PushDrop fields plus the inscribed git commit — with no overlay round trip. |
+| `gib-head.ts` | Decodes a head from its own locking script — six bare PushDrop fields — and reads its commit from the root's `.git` store, both with no overlay round trip. |
 | `resolve-ref.ts` | A URL ref → a `HeadRecord`: outpoint (immutable) or branch name (current head). |
 | `handles.ts` | BRC-169: the handle grammar, manifest discovery, the resolve endpoint, the cache, and `verifyHandle`. Isomorphic and pure where it can be. |
 | `handles-server.ts` | The one shared resolver instance, on `globalThis`. Server only. |
@@ -97,9 +99,12 @@ branch's current head — see `lib/resolve-ref.ts`.
 | `explorer.ts` | Block explorer links (bananablocks.com). |
 | `empty.ts` | The browser stand-in `next.config.ts` aliases `xdelta3-wasm` to. |
 
-`lib/format.test.ts`, `lib/ordfs.test.ts`, `lib/gib-head.test.ts` and
-`lib/handles.test.ts` are the test suite. They are pure; nothing in them
-touches the network or a wallet.
+`lib/format.test.ts`, `lib/ordfs.test.ts`, `lib/gib-head.test.ts`,
+`lib/gib-lookup.test.ts`, `lib/gib-submit.test.ts` and `lib/handles.test.ts`
+are the test suite. Nothing in them touches the network or a wallet: the
+ones that need a response stub `globalThis.fetch` and restore it, because
+the new head format is not on api.1sat.app yet and there is nothing live to
+test against.
 
 ### `components/`, `providers/`
 
@@ -122,23 +127,40 @@ state; add a hook only when two components need the same one.
 A **repository origin** is the outpoint of the genesis `ordfs/dir` root,
 written `txid_vout`. It identifies the repository and never changes.
 
-A **commit head** is a 1-satoshi PushDrop output. Its fields, in order, are
+A **commit head** is a 1-satoshi PushDrop output with **nothing inscribed
+on it**. Its fields, in order, are
 
 ```
-["gib", <repository origin>, <branch>, <root>, <identity>]
+["gib", <repository origin>, <branch>, <root>, <identity>, <branched-from>]
 ```
 
 as UTF-8 strings, locked under protocol `[1, "gib branch"]` with
-`keyID` = the **root** outpoint and counterparty `anyone`, with the git
-commit object inscribed on the same output after the PushDrop lock. The
-coin is filed in basket `gib` under tags `origin:<o>`, `branch:<n>` and
-`commit:<sha>`, minted under the action label `gib push` and burned under
-`gib delete`.
+`keyID` = the **root** outpoint and counterparty `anyone`. The coin is filed
+in basket `gib` under tags `origin:<o>`, `branch:<n>` and `commit:<sha>`,
+minted under the action label `gib push` and burned under `gib delete`.
+
+**The commits moved into the tree.** A published root is git's tree for the
+tip commit plus a `.git` directory holding every commit object reachable
+from it, named by sha, with a `.` entry pointing at the tip's object. gib
+strips `.git` before hashing, so the tree still verifies against what git
+computed, and a commit already on chain is cited at its outpoint rather
+than republished — which is why branching copies nothing.
+
+**The five-field head with an inscribed commit is a different format and
+does not decode.** There is no migration and no compatibility path;
+`lib/gib-head.test.ts` pins the refusal.
 
 Pushing spends the previous head into the next one, so **a head's spend
 chain is the branch history**. `HeadRecord.prev` walks back;
 `HeadRecord.spend` walks forward — `spend.next` present is a push,
 `spend.next` absent is a branch deletion.
+
+**`branchedFrom` is the second parent.** It is empty on an ordinary push,
+whose only parent is the head it spends; it is set on a branch's first head,
+naming the head it forked from, and on a merge *alongside* the spend. So
+`branchedFrom` **with** `prev` is a merge and `branchedFrom` **without** one
+is where a branch began — that is the discriminator the UI uses, in
+`components/head-list.tsx` and on `/r/[origin]/commit/[head]`.
 
 `root` is the `ordfs/dir` outpoint of the tree *at that head*. **File
 browsing always goes through `head.root`**, never through the repository
@@ -149,6 +171,14 @@ origin. Every page does this: `app/r/[origin]/page.tsx`,
 `lib/ordfs.ts:loadRepoMeta` is the one deliberate exception: it reads
 `.gib` through the repository origin, because it wants the genesis `.gib`
 and wants a name without an overlay round trip.
+
+**`.git` is gib's, not the project's.** Every user-facing listing passes
+through `withoutGitStore`, and the tree and blob routes `notFound()` a path
+that starts with `.git` (`isGitStorePath`). The store is read on purpose in
+exactly one place, `loadGitStoreTip`, which walks root → `.git` → `.` with
+the light `loadManifest` rather than `loadDirectory`: a store names every
+commit reachable from the tip, and enriching thousands of entries with bulk
+metadata to read one of them would be absurd.
 
 ## How it connects to everything else
 
@@ -170,6 +200,53 @@ All of these are `GET`, JSON, and wrapped in `lib/gib-api.ts`.
 Paging is `limit` / `from` (an overlay `score`) / `rev`. `404` becomes
 `null`; anything else throws. Server components pass a `revalidate` window
 (30 s by default) which is applied only when `typeof window === "undefined"`.
+
+### The BRC-24 lookups (`/1sat/gib/overlay/lookup`, `lib/gib-lookup.ts`)
+
+`ls_gib` answers three queries, each naming its `type`; a BRC-24 answer
+carries its payload in `result`, **JSON-encoded as a string**.
+
+| `type` | Asks for |
+| --- | --- |
+| `branches` | A repository's branches, each with its tip, plus `defaultBranch` and `owner` from the genesis push. |
+| `headsSince` | One branch's heads from a point forward, each with its BEEF. |
+| `txs` | Whole transactions by txid, as one merged BEEF, at most 50. |
+
+The site wraps `branches` and nothing else: `headsSince` and `txs` are what
+a client cloning a repository needs, and this site browses through ORDFS.
+
+**`branches` is the branch list, and `.gib` is not.** Every page rendering
+`RepoHeader` fetches it and hands it down: it is the only source that says
+which branches exist per publisher, which ones nobody extends any more
+(`spent`), and which branch a clone starts from. `.gib`'s `defaultBranch` is
+a label its publisher wrote; `branches.defaultBranch` is the branch of the
+repository's genesis push, which is what the chain shows. Prefer the
+lookup, fall back to `.gib`, and only then to the `main`/`master` guess in
+`defaultBranchHead`.
+
+### Submitting a head (`/1sat/gib/overlay/submit`, `lib/gib-submit.ts`)
+
+**Nothing indexes a head off the chain any more.** The gib module has no
+queue, no event bridge, no sync worker and no JungleBus subscription: a
+head enters `tm_gib` when a client submits it over BRC-22 and never
+otherwise. A head this site mints and does not submit is on chain and
+invisible, forever.
+
+So `mintHead` submits. Admission judges the push from the submitted BEEF
+alone with no network fetch, so the submission carries, besides the head
+transaction: the transaction holding its `root`, the one holding that
+root's `.git` store, and — when the token names one — the one holding the
+branched-from head. Those come from `/1sat/beef/{txid}`.
+
+An atomic BEEF would prune everything the head does not spend, and a push's
+content is not an ancestor of the head, so the body is a **BEEF V2 with the
+head transaction last**: that is the transaction the engine judges, and
+`buildSubmission` moves it there explicitly because `sortTxs` has no reason
+to. `lib/gib-submit.test.ts` pins that.
+
+A failed submission is **not** a failed mint — the coin is on chain either
+way — so `mintHead` returns `submitted: false` and the Branch toast says so
+rather than reporting an error.
 
 ### ORDFS (`/content` and `/1sat/ordfs` on `STACK_URL`)
 
@@ -201,13 +278,23 @@ see [Wallet permissions](#wallet-permissions).
 
 ### Heads without the overlay
 
-`lib/gib-head.ts:decodeHeadScript` rebuilds a whole `HeadRecord` from a
-locking script: the PushDrop prefix before the ord envelope gives the five
-fields, and `Inscription.decode` plus `parseCommit` gives the commit.
-`/me` uses it, so **"my repositories" works with no overlay at all** — a
-repository you published is yours to see before any indexer catches up.
-`score` and `height` are `0` there (unknown locally) and `spend` is absent
-(the wallet only returns spendable coins).
+`lib/gib-head.ts:decodeHeadScript` rebuilds a `HeadRecord` from a locking
+script: six bare PushDrop fields, tolerating 36-byte raw outpoints and a
+33-byte raw identity as well as the text forms this site writes. `/me` uses
+it, so **"my repositories" works with no gib overlay at all** — a repository
+you published is yours to see before any indexer catches up. `score` and
+`height` are `0` there (unknown locally) and `spend` is absent (the wallet
+only returns spendable coins).
+
+**The commit is not on the token, so `/me` reads it from the tree.**
+`loadTipCommit(head.root)` follows the root's `.git` store to its `.` entry
+and parses the commit object; `components/my-repos.tsx` does it in a second
+react-query keyed on the roots, so the branch list renders from the token
+immediately and the commit subjects fill in. That keeps the page's whole
+point intact — it is an ORDFS read, not a gib overlay round trip, so a head
+the indexer has never seen still shows its commit. Going to
+`/1sat/gib/head/{outpoint}` for the commit would have been one fetch
+instead of two and was rejected for exactly that reason.
 
 ### The gib CLI
 
@@ -243,9 +330,12 @@ standing rule and it has teeth:
 - Manifest decoding is `dirDecode` / `dirNameString` from `@1sat/actions`.
 - Script building and decoding are `pushDropLock`, `pushDropDecode`,
   `unlockByScript`, `completeSignedAction`, `pushDropCustomInstructions`,
-  `stampManagedOutputIds` from `@1sat/actions` and `Inscription` from
-  `@1sat/templates`.
+  `stampManagedOutputIds` from `@1sat/actions`.
 - Never hand-roll PushDrop, B, or OP_RETURN scripts here.
+- BEEF assembly is `@bsv/sdk`'s `Beef`. `@1sat/client`'s `OverlayClient`
+  cannot serve the submit here: its `submit` hard-codes
+  `/1sat/overlay/submit`, and gib's engine is mounted at
+  `/1sat/gib/overlay`. That belongs in the SDK, as a path the caller picks.
 
 If the SDK is missing something, add it to the SDK.
 
@@ -378,11 +468,18 @@ lockfile change.
 functions run in client components with plain `fetch`, so a client call has
 no ISR behind it; that is what react-query's `staleTime` is for.
 
-**Two wallet calls, one of which costs money.** `branchFromHead` fetches the
-commit object from ORDFS, then mints. A failed mint after a successful
-fetch costs nothing; a failed anything after `createAction` returns does
-not. There is no resume state in the browser — the CLI has one, this does
-not.
+**Branching copies nothing, and costs one wallet call.** `branchFromHead`
+mints a head at the same root with `branchedFrom` set to the source head —
+no content fetch in front of it, because the root already carries the commit
+in its `.git` store. What follows the mint is the overlay submission, which
+can fail on its own; the coin is minted either way and there is no resume
+state in the browser.
+
+**A commit the overlay does not hold is normal.** `HeadRecord.commit` is the
+tip commit read out of `.git` at admission. A push that cited its commit
+object instead of republishing it — a fork of a commit already on chain —
+leaves the overlay with the sha and no object, so the commit is absent.
+That is "not held", not "not published"; the copy says so.
 
 **Every page is a server fetch against a live overlay.** `bun run build`
 does not prerender repository pages (they are dynamic), but `bun dev`
