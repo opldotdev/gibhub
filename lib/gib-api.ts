@@ -46,6 +46,19 @@ export interface HeadRecord {
 	branch: string;
 	root: string;
 	identity: string;
+	/**
+	 * The head this one branched from or merged in: the second parent.
+	 * Absent on an ordinary push, whose only parent is the head it spends
+	 * (`prev`). Set on a branch's first head, and on a merge alongside the
+	 * spend — so `branchedFrom` with `prev` is a merge, and without one is
+	 * where a branch began.
+	 */
+	branchedFrom?: string;
+	/**
+	 * The tip commit of the head's published root, read out of the `.git`
+	 * object store at admission. It is not on the token; a head whose store
+	 * only cited the object has no commit here.
+	 */
 	commit?: Commit;
 	prev?: string;
 	spend?: Spend;
@@ -186,7 +199,13 @@ export function repoName(repo: { origin: string; name?: string }): string {
 	return repo.name?.trim() || shortOutpoint(repo.origin);
 }
 
-/** Picks the branch a repo page opens on: `.gib` defaultBranch, main, master, else newest. */
+/**
+ * Picks the branch a repo page opens on. `defaultBranch` should come from
+ * the `branches` lookup — the branch of the repository's genesis push, which
+ * is what the chain shows — and only fall back to the `.gib` label a
+ * publisher wrote. The main/master guess is the last resort, for a
+ * repository the overlay serves no branch list for.
+ */
 export function defaultBranchHead(
 	heads: HeadRecord[],
 	defaultBranch?: string,

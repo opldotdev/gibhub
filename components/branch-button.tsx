@@ -42,8 +42,9 @@ export function branchNameError(name: string): string | undefined {
 
 /**
  * Publishes a branch from this head under the connected wallet's identity:
- * same repository, same commit, a name the user picks (defaults to the
- * source branch).
+ * same repository origin, same root, a name the user picks (defaults to the
+ * source branch). The new head names this one in its branched-from field,
+ * which is how the chain records that the branch started here.
  */
 export function BranchButton({
 	head,
@@ -80,7 +81,9 @@ export function BranchButton({
 						>
 							{result.head.slice(0, 12)}…
 						</Link>
-						. It appears in the branch list once the overlay indexes it.
+						{result.submitted
+							? ". The overlay has it; it appears in the branch list once indexed."
+							: ". The overlay would not take it, so it may not appear in the branch list — the coin is on chain either way."}
 					</span>
 				),
 				duration: 15000,
@@ -124,11 +127,12 @@ export function BranchButton({
 							<DialogTitle>Branch from this commit</DialogTitle>
 							<DialogDescription>
 								Publishes a head under your identity on this repository,
-								pointing at commit{" "}
+								pointing at the same root as{" "}
 								<span className="font-mono">
 									{head.commit?.sha.slice(0, 12) ?? head.outpoint.slice(0, 12)}
 								</span>
-								. Nothing is copied.
+								. Nothing is copied: the root already carries the commit, and
+								the new head names this one as where the branch began.
 							</DialogDescription>
 						</DialogHeader>
 						<div className="flex flex-col gap-1.5">

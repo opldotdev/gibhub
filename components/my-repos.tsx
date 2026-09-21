@@ -9,8 +9,8 @@ import { HeadList } from "@/components/head-list";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
-import type { HeadRecord } from "@/lib/gib-api";
-import { decodeHeadScript } from "@/lib/gib-head";
+import type { Commit, HeadRecord } from "@/lib/gib-api";
+import { decodeHeadScript, loadTipCommit } from "@/lib/gib-head";
 import {
 	authorHandleKeys,
 	matchAuthorHandles,
@@ -58,9 +58,9 @@ export function MyRepos() {
 		queryFn: async (): Promise<BasketHead[]> => {
 			if (!wallet) return [];
 			// Every head is decoded from the wallet's own copy of the locking
-			// script: origin, branch, root, identity, and the inscribed commit.
-			// No overlay round trip; a repo you published is yours to see even
-			// if no indexer has caught up.
+			// script: repository origin, branch, root, identity and the head it
+			// branched from. No overlay round trip; a repository you published
+			// is yours to see even if no indexer has caught up.
 			const list = await wallet.listOutputs({
 				basket: GIB_BASKET,
 				include: "locking scripts",
@@ -77,18 +77,37 @@ export function MyRepos() {
 							? (decodeHeadScript(o.lockingScript, outpoint) ?? null)
 							: null,
 					};
-				})
-				.sort(
-					(a, b) =>
-						(b.head?.commit?.author?.time ?? 0) -
-						(a.head?.commit?.author?.time ?? 0),
-				);
+				});
 		},
 	});
 
-	const heads = (query.data ?? [])
+	const tokens = (query.data ?? [])
 		.map((b) => b.head)
 		.filter((h): h is HeadRecord => !!h);
+
+	// The commit is no longer on the token. It is the `.` entry of the `.git`
+	// object store inside the root the head names, so it is read from the
+	// tree through ORDFS — still no gib overlay round trip, so a head the
+	// indexer has never seen still shows its commit. Roots are immutable, so
+	// this is cached for the session and never refetched.
+	const roots = [...new Set(tokens.map((h) => h.root))].sort();
+	const commitsQuery = useQuery({
+		queryKey: ["head-commits", roots],
+		enabled: roots.length > 0,
+		staleTime: Number.POSITIVE_INFINITY,
+		queryFn: async (): Promise<Record<string, Commit | undefined>> => {
+			const entries = await Promise.all(
+				roots.map(async (root) => [root, await loadTipCommit(root)] as const),
+			);
+			return Object.fromEntries(entries);
+		},
+	});
+
+	const heads = tokens
+		.map((h) => ({ ...h, commit: commitsQuery.data?.[h.root] }))
+		.sort(
+			(a, b) => (b.commit?.author?.time ?? 0) - (a.commit?.author?.time ?? 0),
+		);
 	const handleKeys = authorHandleKeys(heads);
 	// Resolution runs on the server (/api/handles) so the domain fetches and
 	// cache are shared; the verification against each head's signer is local.
@@ -143,12 +162,9 @@ export function MyRepos() {
 		);
 	}
 
-	const indexed = query.data.filter(
-		(b): b is BasketHead & { head: HeadRecord } => !!b.head,
-	);
 	const pending = query.data.filter((b) => !b.head);
 	const byOrigin = new Map<string, HeadRecord[]>();
-	for (const { head } of indexed) {
+	for (const head of heads) {
 		byOrigin.set(head.origin, [...(byOrigin.get(head.origin) ?? []), head]);
 	}
 
@@ -158,8 +174,8 @@ export function MyRepos() {
 				<h1 className="text-xl font-semibold">Your repositories</h1>
 				<p className="text-sm text-muted-foreground">
 					{byOrigin.size} {byOrigin.size === 1 ? "repository" : "repositories"},{" "}
-					{indexed.length} {indexed.length === 1 ? "branch" : "branches"} in
-					your wallet.{" "}
+					{heads.length} {heads.length === 1 ? "branch" : "branches"} in your
+					wallet.{" "}
 					{identityKey && (
 						<Link href={routes.user(identityKey)} className="underline">
 							Public profile

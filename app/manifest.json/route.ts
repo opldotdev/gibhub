@@ -1,3 +1,4 @@
+import { LOOKUP_SERVICE, OVERLAY_PATH, TOPIC } from "@/lib/gib-lookup";
 import { APP_URL, stackApiUrl } from "@/lib/stack";
 
 /**
@@ -88,8 +89,8 @@ const groupPermissions = {
  * against the root instead, but those are not what BRC-180 keys name.
  */
 const overlays = {
-	tm_gib: stackApiUrl("/1sat/gib/overlay"),
-	ls_gib: stackApiUrl("/1sat/gib/overlay"),
+	[TOPIC]: stackApiUrl(OVERLAY_PATH),
+	[LOOKUP_SERVICE]: stackApiUrl(OVERLAY_PATH),
 };
 
 export function GET() {

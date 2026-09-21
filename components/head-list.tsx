@@ -1,4 +1,4 @@
-import { FolderTree, Trash2 } from "lucide-react";
+import { FolderTree, GitBranchPlus, GitMerge, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Activity } from "@/components/activity";
@@ -43,6 +43,9 @@ export function HeadList({
 		<ul className="divide-y border">
 			{heads.map((head) => {
 				const deleted = head.spend && !head.spend.next;
+				// The token's second parent. With a spend as well it is a
+				// merge; without one it is where this branch began.
+				const merge = !!head.branchedFrom && !!head.prev;
 				const subject = firstLine(head.commit?.message);
 				const handle = handles?.[head.outpoint];
 				return (
@@ -55,7 +58,7 @@ export function HeadList({
 								>
 									{subject || (
 										<span className="text-muted-foreground italic">
-											(no commit object)
+											(commit object not held)
 										</span>
 									)}
 								</Link>
@@ -67,6 +70,20 @@ export function HeadList({
 								{deleted && (
 									<Badge variant="destructive" className="gap-1">
 										<Trash2 className="size-3" /> deleted
+									</Badge>
+								)}
+								{head.branchedFrom && (
+									<Badge
+										variant="outline"
+										className="gap-1"
+										title={`${merge ? "Merged in" : "Branched from"} head ${head.branchedFrom}`}
+									>
+										{merge ? (
+											<GitMerge className="size-3" />
+										) : (
+											<GitBranchPlus className="size-3" />
+										)}
+										{merge ? "merge" : "branched"}
 									</Badge>
 								)}
 							</div>

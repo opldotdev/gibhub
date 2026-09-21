@@ -4,8 +4,14 @@
  * Conventions mirror the gib CLI exactly so heads minted here are
  * indistinguishable from CLI pushes: PushDrop protocol `[1, "gib branch"]`,
  * keyID = the root outpoint, counterparty `anyone`, fields as UTF-8 strings,
- * the git commit object inscribed after the lock, basket `gib`, tags
- * `origin:` / `branch:` / `commit:<sha>`, fixed labels `gib push` / `gib delete`.
+ * basket `gib`, tags `origin:` / `branch:` / `commit:<sha>`, fixed labels
+ * `gib push` / `gib delete`.
+ *
+ * A head is a **bare** PushDrop coin. Nothing is inscribed on it: the commit
+ * objects live in the `.git` store of the root it names, so branching from
+ * an existing head republishes no content at all — it points at the same
+ * root, which already carries the commit, and names the head it came from
+ * in the branched-from field.
  *
  * Client-side only: every call goes through the connected BRC-100 wallet.
  */
@@ -17,7 +23,6 @@ import {
 	stampManagedOutputIds,
 	unlockByScript,
 } from "@1sat/actions";
-import { Inscription } from "@1sat/templates";
 import {
 	type CreateActionArgs,
 	Utils,
@@ -26,10 +31,11 @@ import {
 } from "@bsv/sdk";
 import { outpointTxid, outpointVout, toOrdinalOutpoint } from "./format";
 import type { HeadRecord } from "./gib-api";
-import { contentUrl } from "./ordfs";
+import { submitHead } from "./gib-submit";
 import { GIB_BASKET } from "./stack";
 
 export const GIB_PROTOCOL: WalletProtocol = [1, "gib branch"];
+/** What gib writes on a published commit object in a `.git` store. */
 export const GIT_COMMIT_TYPE = "application/x-git-commit";
 const UNLOCK_LENGTH = 73;
 
@@ -57,21 +63,41 @@ export interface HeadFields {
 	root: string;
 	/** Compressed identity public key, hex. */
 	identity: string;
+	/**
+	 * The head this one branched from or merged in — the second parent.
+	 * Omitted on an ordinary push, whose only parent is the head it spends.
+	 */
+	branchedFrom?: string;
 }
 
-const headFields = (t: HeadFields): number[][] =>
-	["gib", t.origin, t.branch, t.root, t.identity].map((s) =>
+/**
+ * The six PushDrop fields, as UTF-8 text. An omitted branched-from is an
+ * empty push, which PushDrop encodes minimally as OP_FALSE — the same
+ * opcode a single zero byte encodes to, so both read back as absent.
+ */
+export const headFields = (t: HeadFields): number[][] => [
+	...["gib", t.origin, t.branch, t.root, t.identity].map((s) =>
 		Utils.toArray(s, "utf8"),
-	);
+	),
+	t.branchedFrom ? Utils.toArray(t.branchedFrom, "utf8") : [],
+];
 
-/** Mints a sealed commit head: PushDrop lock + inscribed git commit object. */
+/**
+ * Mints a sealed commit head: a bare PushDrop lock and nothing else on the
+ * output. The commit the head publishes is already in the `.git` store of
+ * the root it names.
+ *
+ * The overlay does not watch the chain for heads, so the transaction is
+ * handed to it here with the transactions its push relies on. A failed
+ * submission is not a failed mint — the coin exists either way — so it is
+ * reported separately.
+ */
 export async function mintHead(
 	wallet: WalletInterface,
 	fields: HeadFields,
-	commitBytes: Uint8Array,
 	sha: string | undefined,
-): Promise<{ txid: string; outpoint: string }> {
-	const lock = await pushDropLock(
+): Promise<{ txid: string; outpoint: string; submitted: boolean }> {
+	const locking = await pushDropLock(
 		wallet,
 		{
 			fields: headFields(fields),
@@ -82,9 +108,6 @@ export async function mintHead(
 		},
 		{ includeSignature: true },
 	);
-	const locking = Inscription.create(commitBytes, GIT_COMMIT_TYPE, {
-		scriptPrefix: lock,
-	}).lock();
 	const args: CreateActionArgs = {
 		description: `gib head ${sha ?? fields.branch}`.slice(0, 50),
 		outputs: [
@@ -107,7 +130,19 @@ export async function mintHead(
 	stampManagedOutputIds(args);
 	const result = await wallet.createAction(args);
 	if (!result.txid) throw new Error("wallet returned no txid for the head");
-	return { txid: result.txid, outpoint: `${result.txid}_0` };
+
+	let submitted = false;
+	if (result.tx) {
+		submitted = await submitHead({
+			headBeef: result.tx,
+			headTxid: result.txid,
+			root: fields.root,
+			branchedFrom: fields.branchedFrom,
+		})
+			.then(() => true)
+			.catch(() => false);
+	}
+	return { txid: result.txid, outpoint: `${result.txid}_0`, submitted };
 }
 
 /**
@@ -191,28 +226,37 @@ export async function burnHead(
 
 /**
  * Publishes a new branch on the same repository from an existing head: a
- * head under the connected wallet's identity, same origin, same root, same
- * commit object (fetched from ORDFS and reused verbatim). No content is
- * copied and no new origin is minted; the shared DAG shows how it relates.
+ * head under the connected wallet's identity, same repository origin, same
+ * root, naming the head it came from in the branched-from field.
+ *
+ * Nothing is copied and nothing is republished. The root already carries
+ * the `.git` store holding the commit, and the branched-from field is what
+ * records that this branch began at someone else's head — so unlike the
+ * inscribed-commit format this replaces, branching is a single wallet call
+ * with no content fetch in front of it.
  */
 export async function branchFromHead(
 	wallet: WalletInterface,
 	head: HeadRecord,
 	branch: string,
 	identity: string,
-): Promise<{ origin: string; head: string }> {
+): Promise<{ origin: string; head: string; submitted: boolean }> {
 	const name = branch.trim();
 	if (!name) throw new Error("branch name is required");
-	const commitRes = await fetch(contentUrl(head.outpoint));
-	if (!commitRes.ok) {
-		throw new Error(`could not fetch the commit object (${commitRes.status})`);
-	}
-	const commitBytes = new Uint8Array(await commitRes.arrayBuffer());
 	const minted = await mintHead(
 		wallet,
-		{ origin: head.origin, branch: name, root: head.root, identity },
-		commitBytes,
+		{
+			origin: head.origin,
+			branch: name,
+			root: head.root,
+			identity,
+			branchedFrom: toOrdinalOutpoint(head.outpoint),
+		},
 		head.commit?.sha,
 	);
-	return { origin: head.origin, head: minted.outpoint };
+	return {
+		origin: head.origin,
+		head: minted.outpoint,
+		submitted: minted.submitted,
+	};
 }

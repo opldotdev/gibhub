@@ -15,13 +15,25 @@ and burn branch heads.
 - A repository is identified by its **repository origin**: the outpoint of
   its genesis `ordfs/dir` root, `txid_vout`. Say "repository origin", not
   "origin" — an ordinal has an origin and git has a remote named `origin`.
-- A branch head is a 1-satoshi PushDrop output with fields
-  `["gib", <repository origin>, <branch>, <root>, <identity>]`, protocol
-  `[1, "gib branch"]`, keyID = the root outpoint, counterparty `anyone`,
-  and the git commit object inscribed on the same output. Basket `gib`,
-  labels `gib push` / `gib delete`, tags `origin:` / `branch:` / `commit:`.
+- A branch head is a 1-satoshi PushDrop output with **nothing inscribed on
+  it** and six fields,
+  `["gib", <repository origin>, <branch>, <root>, <identity>, <branched-from>]`,
+  protocol `[1, "gib branch"]`, keyID = the root outpoint, counterparty
+  `anyone`. Basket `gib`, labels `gib push` / `gib delete`, tags `origin:` /
+  `branch:` / `commit:`.
+- The commits live in the tree: a published root is git's tree for the tip
+  commit plus a `.git` directory holding every commit object reachable from
+  it, named by sha, with a `.` entry pointing at the tip. gib strips `.git`
+  before hashing, so the tree still verifies against what git computed.
+  **Never show `.git` to someone browsing a repository** — `withoutGitStore`
+  and `isGitStorePath` in `lib/ordfs.ts`.
 - A push spends the previous head into the new one, so the spend chain is
-  the branch history.
+  the branch history. Branched-from is the second parent: with a spend it is
+  a merge, without one it is where a branch began.
+- Branches come from the BRC-24 `branches` lookup, not from `.gib` and not
+  from guessing `main` — that is what the chain shows.
+- Nothing indexes a head off the chain: a minted head is submitted over
+  BRC-22 or it is invisible.
 - **Files are browsed from `head.root`, never from the repository origin.**
   The repository origin resolves to the genesis tree forever.
 
@@ -51,7 +63,9 @@ A branch name is accepted and resolves to that branch's current head.
 | `lib/gib-api.ts` | The overlay client and the `HeadRecord` / `RepoRecord` / `Commit` types. |
 | `lib/ordfs.ts` | `/content/…` URLs, `ordfs/dir` decoding, path walking, file text. |
 | `lib/gib-wallet.ts` | `mintHead`, `burnHead`, `branchFromHead`, and the token vocabulary. |
-| `lib/gib-head.ts` | Decode a head from its own locking script, with no overlay. |
+| `lib/gib-lookup.ts` | The BRC-24 `branches` lookup on `ls_gib`. |
+| `lib/gib-submit.ts` | The submission BEEF (head transaction last) and the BRC-22 POST. |
+| `lib/gib-head.ts` | Decode a head from its own locking script, and read its commit from the root's `.git` store — both without the overlay. |
 | `lib/resolve-ref.ts` | A URL ref → a head: outpoint, or branch name → current head. |
 | `lib/handles.ts`, `lib/handles-server.ts` | BRC-169 grammar, resolution, cache, verification. |
 | `lib/routes.ts` | Every internal URL. Build links here. |

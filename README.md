@@ -3,27 +3,37 @@
 A GitHub-style front end for **gib**, on-chain git on BSV. Repositories are
 directory inscriptions, files are on-chain outputs (with vcdiff patch chains),
 and every branch is a signed 1-sat PushDrop coin ("commit head") whose spend
-chain is the push history. This site only reads: content comes from ORDFS on
-the 1Sat stack, and repository/branch discovery comes from the stack's `gib`
-overlay (`/1sat/gib`).
+chain is the push history. A head carries no content of its own: the commits
+live in a `.git` object store inside the tree it points at. This site reads
+content from ORDFS on the 1Sat stack and repository/branch discovery from
+the stack's `gib` overlay (`/1sat/gib`, plus the BRC-24 `branches` lookup at
+`/1sat/gib/overlay/lookup`); the one thing it writes is a branch head, which
+it hands straight to the overlay's BRC-22 submit route.
 
 ## What it does (v1)
 
 - **Explore**: recently active repositories and recent pushes.
-- **Repository**: current branches, file tree at any push, README, per-file
-  view with syntax highlighting, push history with git commit metadata.
+- **Repository**: the branches the chain shows (per publisher, including the
+  ones nobody extends any more), file tree at any push, README, per-file view
+  with syntax highlighting, push history with git commit metadata. Where a
+  branch came from, and whether a push was a merge, are on the token and
+  shown.
 - **Publisher page**: repositories and pushes by identity key.
 - **Commit DAG**: `/c/<sha>` shows a git commit as a node: every head that
   publishes it (across repos and forks), its parents, and the commits that
   build on it. Parents resolve through the overlay's sha index, so history
   is followable across origins.
 - **My repos**: connect a BRC-100 wallet and see the commit heads in your
-  `gib` basket, resolved through the overlay.
+  `gib` basket, decoded from their own locking scripts, with each commit read
+  from its tree through ORDFS. No gib overlay round trip: a repository you
+  published is yours to see before any indexer catches up.
 
 - **Branch**: publishes a head under your identity on the same repository,
-  pointing at an existing commit (the commit object is reused verbatim, no
-  content copied, no new origin). The name is prompted, defaulting to the
-  source branch. Fork-as-new-origin was removed: a detached copy is a CLI
+  pointing at the same tree and naming the head it came from in its
+  branched-from field. Nothing is copied: the tree already carries the
+  commit. The name is prompted, defaulting to the source branch. The minted
+  transaction is submitted to the overlay, because nothing indexes a head off
+  the chain. Fork-as-new-origin was removed: a detached copy is a CLI
   operation on a fresh `gib init`.
 
 - **Author handles (BRC-169)**: a commit author whose email slot holds a
@@ -34,9 +44,10 @@ overlay (`/1sat/gib`).
   the author as plain text, as git does.
 
 In-browser editing is a later revision. No social layer. Wallet operations in
-`lib/gib-wallet.ts` follow the gib CLI's conventions exactly (protocol
+`lib/gib-wallet.ts` follow gib's conventions exactly (protocol
 `[1, "gib branch"]`, keyID = root outpoint, basket `gib`, `origin:`/`branch:`
-tags incl. `commit:<sha>`, fixed `gib push` / `gib delete` labels, commit object inscribed after the PushDrop lock).
+tags incl. `commit:<sha>`, fixed `gib push` / `gib delete` labels, and six
+bare PushDrop fields with nothing inscribed on the output).
 
 ## Stack
 
@@ -69,10 +80,13 @@ Working on the code: [AGENTS.md](AGENTS.md), and
 
 | Need | Source |
 | --- | --- |
-| Repositories, branches, push history, commit metadata | `GET /1sat/gib/...` (overlay REST) |
+| Repositories, push history, commit metadata | `GET /1sat/gib/...` (overlay REST) |
+| A repository's branches, its default branch and owner | `POST /1sat/gib/overlay/lookup` — BRC-24 `branches` |
 | Directory listing | `GET /content/{manifest}?raw=true` + `POST /1sat/ordfs/metadata` |
 | File bytes (patches applied) | `GET /content/{root}/path` or `/content/{outpoint}` |
-| Your branches | wallet `listOutputs({ basket: "gib" })` → `/1sat/gib/head/{outpoint}` |
+| Your branches | wallet `listOutputs({ basket: "gib" })`, decoded locally |
+| A head's commit, without the overlay | `GET /content/{root}` → `.git` → `.` |
+| Publishing a branch | wallet `createAction` → `POST /1sat/gib/overlay/submit` |
 | Author handles | `https://<domain>/manifest.json` → `metanet.handles.resolve?handle=` (server-side, cached per `ttl`) |
 
 Refs in URLs are head outpoints (immutable), so links never rot; a branch name
@@ -80,9 +94,11 @@ is accepted too and resolves to its current head.
 
 ## SDK dependency
 
-`@1sat/actions` (0.0.224+) and `@1sat/templates` (0.0.38+) from npm provide
-everything the site needs on chain: `dirDecode` for `ordfs/dir` manifests,
-`buildDataScript` for zero-sat data outputs, `pushDropLock` /
-`unlockByScript` for minting and burning heads, and decoders that accept
-zero-length files. `lib/ordfs.ts` decodes binary manifests with the SDK's
-`dirDecode` and legacy JSON manifests locally.
+`@1sat/actions` (0.0.224+) from npm provides what the site needs on chain:
+`dirDecode` for `ordfs/dir` manifests, `pushDropLock` / `pushDropDecode` /
+`unlockByScript` for minting, reading and burning heads, and decoders that
+accept zero-length files. `lib/ordfs.ts` decodes binary manifests with the
+SDK's `dirDecode` and legacy JSON manifests locally. BEEF assembly for the
+overlay submission is `@bsv/sdk`'s `Beef`: `@1sat/client`'s `OverlayClient`
+hard-codes `/1sat/overlay/submit`, and gib's engine is mounted at
+`/1sat/gib/overlay`.

@@ -8,7 +8,14 @@ import {
 } from "@/components/unsupported-manifest";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
 import { getRepo } from "@/lib/gib-api";
-import { type DirEntry, loadDirectory, resolvePath } from "@/lib/ordfs";
+import { lookupBranches } from "@/lib/gib-lookup";
+import {
+	type DirEntry,
+	isGitStorePath,
+	loadDirectory,
+	resolvePath,
+	withoutGitStore,
+} from "@/lib/ordfs";
 import { resolveRef } from "@/lib/resolve-ref";
 import { routes } from "@/lib/routes";
 
@@ -21,9 +28,14 @@ export default async function TreePage({ params }: { params: Params }) {
 	const origin = toOrdinalOutpoint(rawOrigin);
 	const path = rawPath.map(decodeURIComponent);
 
-	const [repo, resolved] = await Promise.all([
+	// `.git` belongs to gib, not to the project: it is not part of the tree
+	// a user browses, at any depth.
+	if (isGitStorePath(path)) notFound();
+
+	const [repo, resolved, branches] = await Promise.all([
 		getRepo(origin),
 		resolveRef(origin, headRef),
+		lookupBranches(origin),
 	]);
 	if (!repo || !resolved) notFound();
 	const { head } = resolved;
@@ -36,7 +48,7 @@ export default async function TreePage({ params }: { params: Params }) {
 		if (entry.kind === "file") {
 			redirect(routes.blob(origin, head.outpoint, path));
 		}
-		entries = await loadDirectory(entry.outpoint);
+		entries = withoutGitStore(await loadDirectory(entry.outpoint));
 	} catch (err) {
 		if (!isUnsupportedManifest(err)) throw err;
 		treeError = err;
@@ -47,6 +59,7 @@ export default async function TreePage({ params }: { params: Params }) {
 			<RepoHeader
 				repo={repo}
 				heads={repo.branchHeads}
+				branches={branches}
 				current={head}
 				tab="code"
 			/>

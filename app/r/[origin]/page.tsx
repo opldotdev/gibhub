@@ -9,7 +9,13 @@ import {
 } from "@/components/unsupported-manifest";
 import { shortOutpoint, toOrdinalOutpoint } from "@/lib/format";
 import { defaultBranchHead, getRepo, repoName } from "@/lib/gib-api";
-import { type DirEntry, fetchText, loadDirectory } from "@/lib/ordfs";
+import { lookupBranches } from "@/lib/gib-lookup";
+import {
+	type DirEntry,
+	fetchText,
+	loadDirectory,
+	withoutGitStore,
+} from "@/lib/ordfs";
 
 export const revalidate = 30;
 
@@ -33,15 +39,24 @@ const README_RE = /^readme(\.(md|markdown|txt))?$/i;
 export default async function RepoPage({ params }: { params: Params }) {
 	const { origin: rawOrigin } = await params;
 	const origin = toOrdinalOutpoint(rawOrigin);
-	const repo = await getRepo(origin);
+	const [repo, branches] = await Promise.all([
+		getRepo(origin),
+		lookupBranches(origin),
+	]);
 	if (!repo) notFound();
 
-	const head = defaultBranchHead(repo.branchHeads, repo.defaultBranch);
+	// The branch to open on is the genesis push's, which is what the chain
+	// shows; `.gib`'s defaultBranch is only the label its publisher wrote.
+	const head = defaultBranchHead(
+		repo.branchHeads,
+		branches?.defaultBranch || repo.defaultBranch,
+	);
 	let entries: DirEntry[] = [];
 	let treeError: unknown = null;
 	if (head) {
 		try {
-			entries = await loadDirectory(head.root);
+			// `.git` is gib's object store, not the project's files.
+			entries = withoutGitStore(await loadDirectory(head.root));
 		} catch (err) {
 			treeError = err;
 		}
@@ -58,6 +73,7 @@ export default async function RepoPage({ params }: { params: Params }) {
 			<RepoHeader
 				repo={repo}
 				heads={repo.branchHeads}
+				branches={branches}
 				current={head}
 				tab="code"
 			/>
