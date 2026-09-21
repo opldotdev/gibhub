@@ -5,6 +5,7 @@ import { RepoHeader } from "@/components/repo-header";
 import { Button } from "@/components/ui/button";
 import { toOrdinalOutpoint } from "@/lib/format";
 import { getBranch, getRepo } from "@/lib/gib-api";
+import { lookupBranches } from "@/lib/gib-lookup";
 import { authorHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
 
@@ -27,12 +28,13 @@ export default async function CommitsPage({
 	const origin = toOrdinalOutpoint(rawOrigin);
 	const branch = ref.map(decodeURIComponent).join("/");
 
-	const [repo, data] = await Promise.all([
+	const [repo, data, branches] = await Promise.all([
 		getRepo(origin),
 		getBranch(origin, branch, {
 			limit: PAGE,
 			from: from ? Number(from) : undefined,
 		}),
+		lookupBranches(origin),
 	]);
 	if (!repo || !data) notFound();
 	const handles = await authorHandles(data.history);
@@ -45,6 +47,7 @@ export default async function CommitsPage({
 			<RepoHeader
 				repo={repo}
 				heads={repo.branchHeads}
+				branches={branches}
 				current={data.head ?? data.history[0]}
 				tab="commits"
 			/>

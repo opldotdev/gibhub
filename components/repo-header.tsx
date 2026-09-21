@@ -8,28 +8,54 @@ import { HandleLink } from "@/components/handle-link";
 import { IdentityLink } from "@/components/identity-link";
 import { shortOutpoint } from "@/lib/format";
 import { type HeadRecord, type RepoRecord, repoName } from "@/lib/gib-api";
+import type { BranchesResult, BranchRecord } from "@/lib/gib-lookup";
 import { authorHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 /**
  * Repository title bar. Owner and branch labels carry a BRC-169 handle only
- * when that identity's own current head on this origin has a verified one.
+ * when that identity's own current head on this repository origin has a
+ * verified one.
  */
 export async function RepoHeader({
 	repo,
 	heads,
+	branches,
 	current,
 	tab,
 }: {
 	repo: RepoRecord;
-	/** Current heads (one per branch, possibly per publisher). */
+	/** Current heads, for the handle labels: they carry the commit authors. */
 	heads: HeadRecord[];
+	/**
+	 * The repository's branches as the overlay's `branches` lookup reports
+	 * them — the chain's answer, including branches nobody is extending any
+	 * more. Null when the overlay could not answer.
+	 */
+	branches: BranchesResult | null;
 	/** The head the page is showing, if any. */
 	current?: HeadRecord;
 	tab: "code" | "commits";
 }) {
+	// The genesis push names the repository's default branch; the `.gib`
+	// label is only a fallback, and "main" only when there is nothing else.
+	const defaultBranch = branches?.defaultBranch || repo.defaultBranch || "main";
 	const branch = current?.branch ?? "";
+	const owner = branches?.owner || repo.owner;
+	// The lookup is the branch list. When the overlay cannot answer it, the
+	// current heads from the REST route are a narrower stand-in — every
+	// branch that still has one — rather than an empty picker.
+	const branchList: BranchRecord[] =
+		branches?.branches ??
+		heads.map((h) => ({
+			branch: h.branch,
+			identity: h.identity,
+			tip: h.outpoint,
+			sha: h.commit?.sha,
+			root: h.root,
+			score: h.score,
+		}));
 	const handles = await authorHandles(heads);
 	const labels: Record<string, string> = {};
 	for (const h of heads) {
@@ -37,7 +63,7 @@ export async function RepoHeader({
 		if (verified && !labels[h.identity]) labels[h.identity] = verified.display;
 	}
 	const ownerHandle = heads.find(
-		(h) => h.identity === repo.owner && handles[h.outpoint],
+		(h) => h.identity === owner && handles[h.outpoint],
 	);
 	return (
 		<div className="flex flex-col gap-3 mb-4">
@@ -68,7 +94,7 @@ export async function RepoHeader({
 							className="text-foreground"
 						/>
 					)}
-					<IdentityLink identity={repo.owner} />
+					<IdentityLink identity={owner} />
 				</span>
 			</div>
 			{repo.description && (
@@ -77,7 +103,7 @@ export async function RepoHeader({
 			<div className="flex items-center gap-3 flex-wrap text-sm">
 				<BranchPicker
 					origin={repo.origin}
-					heads={heads}
+					branches={branchList}
 					current={current}
 					labels={labels}
 				/>
@@ -94,7 +120,7 @@ export async function RepoHeader({
 						<GitBranch className="size-4" /> Code
 					</Tab>
 					<Tab
-						href={routes.commits(repo.origin, branch || "main")}
+						href={routes.commits(repo.origin, branch || defaultBranch)}
 						active={tab === "commits"}
 					>
 						<History className="size-4" /> Commits

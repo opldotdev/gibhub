@@ -18,7 +18,14 @@ import {
 	timeAgo,
 	toOrdinalOutpoint,
 } from "@/lib/format";
-import { getCommit, getHead, getRepo, type Signature } from "@/lib/gib-api";
+import {
+	getCommit,
+	getHead,
+	getRepo,
+	type HeadRecord,
+	type Signature,
+} from "@/lib/gib-api";
+import { lookupBranches } from "@/lib/gib-lookup";
 import type { VerifiedHandle } from "@/lib/handles";
 import { authorHandles, commitHandles } from "@/lib/handles-server";
 import { routes } from "@/lib/routes";
@@ -30,13 +37,20 @@ type Params = Promise<{ origin: string; head: string }>;
 export default async function CommitPage({ params }: { params: Params }) {
 	const { origin: rawOrigin, head: rawHead } = await params;
 	const origin = toOrdinalOutpoint(rawOrigin);
-	const [repo, head] = await Promise.all([
+	const [repo, head, branches] = await Promise.all([
 		getRepo(origin),
 		getHead(toOrdinalOutpoint(rawHead)),
+		lookupBranches(origin),
 	]);
 	if (!repo || !head || head.origin !== origin) notFound();
 	const commit = head.commit;
-	const node = commit ? await getCommit(commit.sha) : null;
+	// The token's second parent. Alongside a spend it is a merge; on its own
+	// it is where this branch began. Resolving it gives the branch name and
+	// publisher it came from, and the repository origin to link it under.
+	const [node, from] = await Promise.all([
+		commit ? getCommit(commit.sha) : null,
+		head.branchedFrom ? getHead(head.branchedFrom) : null,
+	]);
 	const elsewhere =
 		node?.heads.filter((h) => h.outpoint !== head.outpoint) ?? [];
 	const children = node?.children ?? [];
@@ -53,6 +67,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 			<RepoHeader
 				repo={repo}
 				heads={repo.branchHeads}
+				branches={branches}
 				current={head}
 				tab="commits"
 			/>
@@ -62,7 +77,7 @@ export default async function CommitPage({ params }: { params: Params }) {
 						<h2 className="text-lg font-semibold flex-1">
 							{firstLine(commit?.message) || (
 								<span className="text-muted-foreground italic">
-									No commit object on this head
+									The overlay holds no commit object for this head
 								</span>
 							)}
 						</h2>
@@ -70,6 +85,11 @@ export default async function CommitPage({ params }: { params: Params }) {
 							{head.branch}
 						</Badge>
 						{deleted && <Badge variant="destructive">deleted</Badge>}
+						{head.branchedFrom && (
+							<Badge variant="outline">
+								{head.prev ? "merge" : "branched"}
+							</Badge>
+						)}
 						{!head.spend && <Badge>current</Badge>}
 					</div>
 					{commit && messageBody(commit.message) && (
@@ -134,6 +154,18 @@ export default async function CommitPage({ params }: { params: Params }) {
 						</Link>
 						<CopyButton value={head.root} />
 					</dd>
+					{head.branchedFrom && (
+						<>
+							<Term>{head.prev ? "merged in" : "branched from"}</Term>
+							<dd className="font-mono break-all">
+								<BranchedFrom
+									outpoint={head.branchedFrom}
+									head={from}
+									fallbackOrigin={origin}
+								/>
+							</dd>
+						</>
+					)}
 					{head.prev && (
 						<>
 							<Term>previous push</Term>
@@ -211,6 +243,35 @@ export default async function CommitPage({ params }: { params: Params }) {
 				</div>
 			)}
 		</div>
+	);
+}
+
+/**
+ * The head a push branched from or merged in. Linked under its own
+ * repository origin when the overlay knows it — a branch may fork from a
+ * head this site has never shown — and left as a bare outpoint when it does
+ * not, because a link that 404s is worse than none.
+ */
+function BranchedFrom({
+	outpoint,
+	head,
+	fallbackOrigin,
+}: {
+	outpoint: string;
+	head: HeadRecord | null;
+	fallbackOrigin: string;
+}) {
+	if (!head) {
+		return <span title={outpoint}>{shortOutpoint(outpoint, 12, 6)}</span>;
+	}
+	return (
+		<Link
+			href={routes.commit(head.origin || fallbackOrigin, outpoint)}
+			className="hover:underline"
+		>
+			{shortOutpoint(outpoint, 12, 6)}
+			<span className="text-muted-foreground"> · {head.branch}</span>
+		</Link>
 	);
 }
 

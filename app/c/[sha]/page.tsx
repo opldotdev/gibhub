@@ -53,7 +53,7 @@ export default async function CommitShaPage({ params }: { params: Params }) {
 						firstLine(commit.message)
 					) : (
 						<span className="text-muted-foreground italic">
-							Commit object not published on any indexed head
+							No indexed head holds this commit object
 						</span>
 					)}
 				</h1>
@@ -93,7 +93,7 @@ export default async function CommitShaPage({ params }: { params: Params }) {
 					heads={node.heads}
 					handles={handles}
 					showRepo
-					empty="No indexed head carries this commit; it is only known as a parent."
+					empty="No indexed head publishes this commit; it is only known as a parent."
 				/>
 			</section>
 

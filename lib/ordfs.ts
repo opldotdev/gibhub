@@ -21,6 +21,18 @@ export const JSON_MANIFEST_TYPE = JSON_MANIFEST_CONTENT_TYPE_LEGACY;
 export const BINARY_MANIFEST_TYPE = DIR_CONTENT_TYPE;
 export const PATCH_TYPE = "ordfs/patch";
 
+/**
+ * The object store gib adds to a published root: every commit object
+ * reachable from the tip, named by its sha, plus a `.` entry pointing at the
+ * tip commit. It is gib's, not the project's — git itself refuses a `.git`
+ * entry in a tree, so the name can never collide with a real file, and gib
+ * strips it before hashing so the tree still verifies against what git
+ * computed. Nobody browsing a repository should see it.
+ */
+export const GIT_STORE = ".git";
+/** The store's default entry: the tip commit object. */
+export const GIT_STORE_TIP = ".";
+
 export type EntryKind = "file" | "dir";
 
 export interface DirEntry {
@@ -80,7 +92,7 @@ export function resolvePointer(manifestOutpoint: string, pointer: string) {
 }
 
 /** A manifest entry before metadata enrichment. */
-interface RawEntry {
+export interface RawEntry {
 	name: string;
 	outpoint: string;
 	/** Known from the binary format; undefined for legacy JSON. */
@@ -146,6 +158,32 @@ export async function getMetadata(
 }
 
 /**
+ * A directory manifest's entries, names and outpoints only. No metadata
+ * round trip: what a caller that is looking for one entry by name needs.
+ */
+export async function loadManifest(
+	manifestOutpoint: string,
+): Promise<RawEntry[]> {
+	const outpoint = toOrdinalOutpoint(manifestOutpoint);
+	const res = await fetch(rawContentUrl(outpoint), serverFetchInit(3600));
+	if (!res.ok) throw new Error(`ordfs content ${outpoint}: ${res.status}`);
+	const type = baseType(res.headers.get("content-type"));
+	if (type === BINARY_MANIFEST_TYPE) {
+		return decodeBinaryManifest(
+			new Uint8Array(await res.arrayBuffer()),
+			outpoint,
+		);
+	}
+	if (type === JSON_MANIFEST_TYPE) {
+		return decodeJsonManifest(
+			(await res.json()) as Record<string, string>,
+			outpoint,
+		);
+	}
+	throw new UnsupportedManifestError(type || "unknown");
+}
+
+/**
  * Lists a directory manifest's entries with content type and size from bulk
  * metadata. Immutable by outpoint, so cached aggressively.
  */
@@ -153,24 +191,7 @@ export async function loadDirectory(
 	manifestOutpoint: string,
 ): Promise<DirEntry[]> {
 	const outpoint = toOrdinalOutpoint(manifestOutpoint);
-	const res = await fetch(rawContentUrl(outpoint), serverFetchInit(3600));
-	if (!res.ok) throw new Error(`ordfs content ${outpoint}: ${res.status}`);
-	const type = baseType(res.headers.get("content-type"));
-
-	let raw: RawEntry[];
-	if (type === BINARY_MANIFEST_TYPE) {
-		raw = decodeBinaryManifest(
-			new Uint8Array(await res.arrayBuffer()),
-			outpoint,
-		);
-	} else if (type === JSON_MANIFEST_TYPE) {
-		raw = decodeJsonManifest(
-			(await res.json()) as Record<string, string>,
-			outpoint,
-		);
-	} else {
-		throw new UnsupportedManifestError(type || "unknown");
-	}
+	const raw = await loadManifest(outpoint);
 
 	const meta: Record<string, OrdfsMetadata | null> = {};
 	for (let i = 0; i < raw.length; i += 100) {
@@ -213,6 +234,42 @@ export async function loadDirectory(
 				? -1
 				: 1,
 	);
+}
+
+/**
+ * A published root's entries as the project wrote them: gib's `.git` object
+ * store removed. Every directory listing a user sees goes through this.
+ */
+export const withoutGitStore = (entries: DirEntry[]) =>
+	entries.filter((e) => e.name !== GIT_STORE);
+
+/** True for a browse path that reaches into gib's object store. */
+export const isGitStorePath = (path: string[]) => path[0] === GIT_STORE;
+
+/**
+ * The tip commit object of a published root: the `.git` store's `.` entry.
+ * Null when the root has no readable store, which is how a head that cited
+ * its commit instead of republishing it reads from the tree alone.
+ */
+export async function loadGitStoreTip(
+	root: string,
+): Promise<Uint8Array | null> {
+	try {
+		// The light manifest reader, not loadDirectory: a store names every
+		// commit reachable from the tip, and enriching thousands of entries
+		// with metadata to read one of them would be absurd.
+		const store = (await loadManifest(root)).find((e) => e.name === GIT_STORE);
+		if (!store) return null;
+		const tip = (await loadManifest(store.outpoint)).find(
+			(e) => e.name === GIT_STORE_TIP,
+		);
+		if (!tip) return null;
+		const res = await fetch(contentUrl(tip.outpoint), serverFetchInit(3600));
+		if (!res.ok) return null;
+		return new Uint8Array(await res.arrayBuffer());
+	} catch {
+		return null;
+	}
 }
 
 /** HEAD on the content route: type and length of the resolved (patch-applied) file. */
